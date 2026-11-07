@@ -1,31 +1,50 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import type { UserDTO } from '@mitome/shared';
-import { api, ApiError } from './api';
-import { usePath } from './router';
+import { api, setTokenGetter } from './api';
+import { navigate, usePath } from './router';
 import { Login } from './pages/Login';
 import { Projects } from './pages/Projects';
 import { Editor } from './pages/Editor';
 
 export function App() {
   const path = usePath();
-  const [user, setUser] = useState<UserDTO | null | undefined>(undefined);
+  const { isLoaded, isSignedIn, getToken, signOut } = useAuth();
+  const [user, setUser] = useState<UserDTO | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Signed in: leave the auth URLs behind.
+  useEffect(() => {
+    if (isSignedIn && /^\/sign-(in|up)/.test(path)) navigate('/', true);
+  }, [isSignedIn, path]);
 
   useEffect(() => {
+    setTokenGetter(() => getToken());
+  }, [getToken]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      setUser(null);
+      return;
+    }
+    let cancelled = false;
+    setError(null);
     api
       .me()
-      .then((r) => setUser(r.user))
-      .catch((e) => setUser(e instanceof ApiError && e.status === 401 ? null : null));
-  }, []);
+      .then((r) => !cancelled && setUser(r.user))
+      .catch((e: Error) => !cancelled && setError(e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn]);
 
-  const signOut = useCallback(async () => {
-    await api.logout().catch(() => undefined);
-    setUser(null);
-  }, []);
-
-  if (user === undefined) return <div className="auth caption">Loading…</div>;
-  if (user === null) return <Login onSignedIn={setUser} />;
+  if (!isLoaded) return <div className="auth caption">Loading…</div>;
+  if (!isSignedIn) return <Login />;
+  if (error) return <div className="auth caption">{error}</div>;
+  if (!user) return <div className="auth caption">Loading…</div>;
 
   const editorMatch = /^\/p\/([0-9a-f-]{36})$/i.exec(path);
   if (editorMatch) return <Editor key={editorMatch[1]} projectId={editorMatch[1]!} />;
-  return <Projects user={user} onSignOut={signOut} />;
+  return <Projects user={user} onSignOut={() => void signOut()} />;
 }

@@ -1,55 +1,8 @@
-import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
-import { promisify } from 'node:util';
-import { and, eq, gt, lt } from 'drizzle-orm';
-import type { FastifyReply, FastifyRequest } from 'fastify';
-import { config } from './config.js';
+import { and, eq, isNull, lt, sql } from 'drizzle-orm';
+import type { FastifyRequest } from 'fastify';
+import { clerkClient, getAuth } from '@clerk/fastify';
 import { db, schema } from './db/client.js';
 import { HttpError } from './http.js';
-
-const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number, opts: object) => Promise<Buffer>;
-const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
-export const SESSION_COOKIE = 'mitome_session';
-
-/** scrypt hash, stored as scrypt$N$r$p$salt$hash (base64url). */
-export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16);
-  const hash = await scrypt(password, salt, 32, SCRYPT);
-  return ['scrypt', SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString('base64url'), hash.toString('base64url')].join('$');
-}
-
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [algo, N, r, p, saltB64, hashB64] = stored.split('$');
-  if (algo !== 'scrypt' || !saltB64 || !hashB64) return false;
-  const expected = Buffer.from(hashB64, 'base64url');
-  const actual = await scrypt(password, Buffer.from(saltB64, 'base64url'), expected.length, {
-    N: Number(N),
-    r: Number(r),
-    p: Number(p),
-    maxmem: SCRYPT.maxmem,
-  });
-  return timingSafeEqual(expected, actual);
-}
-
-const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
-
-export async function createSession(reply: FastifyReply, userId: string) {
-  const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + config.SESSION_DAYS * 24 * 60 * 60 * 1000);
-  await db.insert(schema.sessions).values({ id: tokenHash(token), userId, expiresAt });
-  reply.setCookie(SESSION_COOKIE, token, {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: config.cookieSecure,
-    expires: expiresAt,
-  });
-}
-
-export async function destroySession(req: FastifyRequest, reply: FastifyReply) {
-  const token = req.cookies[SESSION_COOKIE];
-  if (token) await db.delete(schema.sessions).where(eq(schema.sessions.id, tokenHash(token)));
-  reply.clearCookie(SESSION_COOKIE, { path: '/' });
-}
 
 export interface AuthedUser {
   id: string;
@@ -62,17 +15,46 @@ declare module 'fastify' {
   }
 }
 
-/** Loads the session user, if any, onto req.user. */
+const userCols = { id: schema.users.id, email: schema.users.email };
+
+/**
+ * Maps the Clerk session (verified by the clerk plugin) to our own users row and puts it on
+ * req.user. Projects, assets and quotas all hang off users.id, so that stays the identity the
+ * rest of the app uses; Clerk only proves who is calling.
+ */
 export async function loadUser(req: FastifyRequest) {
-  const token = req.cookies[SESSION_COOKIE];
-  if (!token) return;
-  const rows = await db
-    .select({ id: schema.users.id, email: schema.users.email })
-    .from(schema.sessions)
-    .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
-    .where(and(eq(schema.sessions.id, tokenHash(token)), gt(schema.sessions.expiresAt, new Date())))
-    .limit(1);
-  if (rows[0]) req.user = rows[0];
+  const { userId: clerkId } = getAuth(req);
+  if (!clerkId) return;
+
+  const known = await db.select(userCols).from(schema.users).where(eq(schema.users.clerkId, clerkId)).limit(1);
+  if (known[0]) {
+    req.user = known[0];
+    return;
+  }
+
+  // First request from this Clerk user: fetch their email once and create or link a row.
+  const cu = await clerkClient.users.getUser(clerkId);
+  const primary = cu.emailAddresses.find((e) => e.id === cu.primaryEmailAddressId) ?? cu.emailAddresses[0];
+  if (!primary) throw new HttpError(403, 'no_email', 'Your account has no email address.');
+  const email = primary.emailAddress.toLowerCase();
+
+  // Adopt a pre-Clerk account with the same email, but only if Clerk has verified the address.
+  if (primary.verification?.status === 'verified') {
+    const [linked] = await db
+      .update(schema.users)
+      .set({ clerkId })
+      .where(and(sql`lower(${schema.users.email}) = ${email}`, isNull(schema.users.clerkId)))
+      .returning(userCols);
+    if (linked) {
+      req.user = linked;
+      return;
+    }
+  }
+
+  await db.insert(schema.users).values({ email, clerkId }).onConflictDoNothing();
+  const [created] = await db.select(userCols).from(schema.users).where(eq(schema.users.clerkId, clerkId)).limit(1);
+  if (!created) throw new HttpError(409, 'email_taken', 'An account with this email already exists.');
+  req.user = created;
 }
 
 export function requireUser(req: FastifyRequest): AuthedUser {
@@ -80,6 +62,7 @@ export function requireUser(req: FastifyRequest): AuthedUser {
   return req.user;
 }
 
+/** Leftover from password sessions; the table is empty for new installs. */
 export async function purgeExpiredSessions() {
   await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, new Date()));
 }

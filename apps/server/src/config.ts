@@ -16,8 +16,8 @@ const schema = z.object({
   /** Used to sign local storage URLs. Use a long random string in production. */
   SESSION_SECRET: z.string().min(16),
   COOKIE_SECURE: z.string().optional(),
-  ALLOW_SIGNUP: bool,
-  SESSION_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  CLERK_SECRET_KEY: z.string().min(1),
+  CLERK_PUBLISHABLE_KEY: z.string().min(1),
 
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   LOCAL_STORAGE_DIR: z.string().default('./data/storage'),

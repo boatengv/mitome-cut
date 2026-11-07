@@ -10,6 +10,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.11",
+    "@clerk/themes": "^2.4.57",
     "@mitome/shared": "*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
