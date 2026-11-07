@@ -39,7 +39,9 @@ export const users = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     email: text('email').notNull(),
-    passwordHash: text('password_hash').notNull(),
+    /** Legacy local-password accounts only; Clerk-managed users have none. */
+    passwordHash: text('password_hash'),
+    clerkId: text('clerk_id').unique(),
     ...timestamps,
   },
   (t) => [uniqueIndex('users_email_idx').on(sql`lower(${t.email})`)],

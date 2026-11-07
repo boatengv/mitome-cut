@@ -1,5 +1,5 @@
 import Fastify, { type FastifyError } from 'fastify';
-import cookie from '@fastify/cookie';
+import { clerkPlugin } from '@clerk/fastify';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import fs from 'node:fs';
@@ -36,12 +36,18 @@ export async function buildApp() {
     }
   });
 
-  await app.register(cookie);
   await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
 
   fs.mkdirSync(config.localStorageDir, { recursive: true });
   // Decorates reply.sendFile (Range support) for local storage and the SPA.
   await app.register(fastifyStatic, { root: config.localStorageDir, serve: false });
+
+  // Verifies the Clerk session token on every request; must be registered before loadUser runs.
+  await app.register(clerkPlugin, {
+    hookName: 'onRequest',
+    publishableKey: config.CLERK_PUBLISHABLE_KEY,
+    secretKey: config.CLERK_SECRET_KEY,
+  });
 
   app.addHook('onRequest', async (req) => {
     if (req.url.startsWith('/api/')) await loadUser(req);

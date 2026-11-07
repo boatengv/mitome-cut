@@ -21,13 +21,23 @@ export class ApiError extends Error {
   }
 }
 
+let tokenGetter: (() => Promise<string | null>) | null = null;
+/** Called once Clerk is ready; every API request then carries the session token. */
+export function setTokenGetter(fn: () => Promise<string | null>) {
+  tokenGetter = fn;
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
+    const headers: Record<string, string> = {};
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    const token = tokenGetter ? await tokenGetter() : null;
+    if (token) headers.Authorization = `Bearer ${token}`;
     res = await fetch(url, {
       method,
       credentials: 'same-origin',
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -43,11 +53,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 }
 
 export const api = {
-  authConfig: () => request<{ allowSignup: boolean }>('GET', '/api/auth/config'),
   me: () => request<{ user: UserDTO }>('GET', '/api/auth/me'),
-  login: (email: string, password: string) => request<{ user: UserDTO }>('POST', '/api/auth/login', { email, password }),
-  signup: (email: string, password: string) => request<{ user: UserDTO }>('POST', '/api/auth/signup', { email, password }),
-  logout: () => request<{ ok: true }>('POST', '/api/auth/logout'),
 
   listProjects: () => request<{ projects: ProjectSummaryDTO[] }>('GET', '/api/projects'),
   createProject: (title: string) => request<{ project: ProjectDTO }>('POST', '/api/projects', { title }),

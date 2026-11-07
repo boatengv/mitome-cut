@@ -31,7 +31,7 @@ npm install
 npm run dev                       # API :3000, worker, web :5173
 ```
 
-Open http://localhost:5173 and create an account. Media is stored under `./data/storage` by default. To use MinIO instead, run `docker compose up -d` and switch to the `S3_*` settings in `.env`.
+Sign-in is handled by [Clerk](https://dashboard.clerk.com). Create an application there and put its keys in `.env` (`CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and the same publishable key as `VITE_CLERK_PUBLISHABLE_KEY`). Then open http://localhost:5173 and create an account. Media is stored under `./data/storage` by default. To use MinIO instead, run `docker compose up -d` and switch to the `S3_*` settings in `.env`.
 
 No Node on your machine? `docker compose --profile app up --build` runs everything at http://localhost:3000.
 
@@ -43,7 +43,7 @@ npm test                          # unit tests: timeline maths, render graph
 node scripts/smoke.mjs            # end to end against a running API + worker
 ```
 
-The smoke test signs up, uploads video and audio, generates a scene, saves the timeline, checks conflict and ownership rules, exports MP4 and GIF, and verifies the output with ffprobe. `.github/workflows/ci.yml` runs all three on every push once the repo is on GitHub.
+The smoke test creates a throwaway Clerk user (needs `CLERK_SECRET_KEY`; use a development instance) and signs in, uploads video and audio, generates a scene, saves the timeline, checks conflict and ownership rules, exports MP4 and GIF, and verifies the output with ffprobe. `.github/workflows/ci.yml` runs all three on every push once the repo is on GitHub.
 
 ## Repository layout
 
@@ -82,9 +82,8 @@ These limits keep usage and cost bounded. All are environment variables:
 | `GENERATIONS_PER_DAY` | 20 | Scene generations per user per 24 h |
 | `EXPORTS_PER_DAY` | 30 | Exports per user per 24 h |
 | `MAX_PROJECTS_PER_USER` | 50 | Projects per user |
-| `ALLOW_SIGNUP` | false in production | Who can create accounts |
 
-There are also rate limits: 300 requests a minute per IP overall, and 10 a minute on login and sign-up.
+There is also a rate limit of 300 requests a minute per IP. Who can sign up is controlled in the Clerk dashboard (allowlist or invite-only).
 
 ## Deploying (Hetzner + Cloudflare R2, about €6/month)
 
@@ -99,7 +98,7 @@ There are also rate limits: 300 requests a minute per IP overall, and 10 a minut
    ```bash
    ./deploy/deploy.sh $(terraform -chdir=infra/terraform output -raw server_ipv4)
    ```
-5. Set `ALLOW_SIGNUP=true`, deploy, create your account, then set it back to `false` and deploy again.
+5. In the Clerk dashboard, restrict sign-ups (allowlist or invite-only) before you share the URL.
 
 Caddy gets the TLS certificate automatically. Migrations run when the API starts.
 
@@ -124,4 +123,3 @@ None of these need code changes.
 - Single-user projects; no sharing or real-time collaboration yet. The timeline format is ready for a CRDT sync layer later.
 - The editor preview syncs HTML video elements to the timeline clock. It's accurate enough for editing; the export is frame-accurate.
 - No transitions, keyframes or multiple video tracks yet.
-- Email verification and password reset are not built yet.
