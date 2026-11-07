@@ -43,7 +43,7 @@ npm test                          # unit tests: timeline maths, render graph
 node scripts/smoke.mjs            # end to end against a running API + worker
 ```
 
-The smoke test (currently written for the old email/password API, so it needs updating for Clerk) signs up, uploads video and audio, generates a scene, saves the timeline, checks conflict and ownership rules, exports MP4 and GIF, and verifies the output with ffprobe. `.github/workflows/ci.yml` runs all three on every push once the repo is on GitHub.
+The smoke test creates a throwaway Clerk user (needs `CLERK_SECRET_KEY`; use a development instance) and signs in, uploads video and audio, generates a scene, saves the timeline, checks conflict and ownership rules, exports MP4 and GIF, and verifies the output with ffprobe. `.github/workflows/ci.yml` runs all three on every push once the repo is on GitHub.
 
 ## Repository layout
 

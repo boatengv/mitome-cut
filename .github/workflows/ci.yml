@@ -21,7 +21,9 @@ jobs:
     env:
       DATABASE_URL: postgres://mitome:mitome@localhost:5432/mitome
       SESSION_SECRET: ci-only-secret-not-for-production
-      ALLOW_SIGNUP: "true"
+      # Use a Clerk DEVELOPMENT instance: the smoke test creates and deletes a throwaway user.
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       STORAGE_DRIVER: local
       LOCAL_STORAGE_DIR: /tmp/mitome-storage
     steps:
