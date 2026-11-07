@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mitome
+          POSTGRES_PASSWORD: mitome
+          POSTGRES_DB: mitome
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mitome" --health-interval 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://mitome:mitome@localhost:5432/mitome
+      SESSION_SECRET: ci-only-secret-not-for-production
+      ALLOW_SIGNUP: "true"
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_DIR: /tmp/mitome-storage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: End-to-end smoke test
+        run: |
+          WEB_DIST_DIR=apps/web/dist node apps/server/dist/api.js &
+          node apps/server/dist/worker.js &
+          for i in $(seq 1 30); do curl -sf localhost:3000/api/health && break; sleep 1; done
+          node scripts/smoke.mjs

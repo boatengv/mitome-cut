@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+data
+.env
+.env.*
+!.env.example
+infra/terraform/.terraform
+infra/terraform/*.tfstate*
+infra/terraform/terraform.tfvars
+.git

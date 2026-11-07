@@ -1,0 +1,28 @@
+{
+  "name": "mitome-cut",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mitome Cut by Mitome Studios: a browser video editor with AI scene generation.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,worker,web -c auto \"npm:dev:api\" \"npm:dev:worker\" \"npm:dev:web\"",
+    "dev:api": "npm run dev:api -w @mitome/server",
+    "dev:worker": "npm run dev:worker -w @mitome/server",
+    "dev:web": "npm run dev -w @mitome/web",
+    "db:generate": "npm run db:generate -w @mitome/server",
+    "db:migrate": "npm run db:migrate -w @mitome/server",
+    "build": "npm run build -w @mitome/web && npm run build -w @mitome/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3"
+  }
+}
