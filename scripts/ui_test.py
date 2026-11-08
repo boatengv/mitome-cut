@@ -36,7 +36,7 @@ with sync_playwright() as p:
     pg.click('#btnSettings')
     expect(pg.locator('#sElNote')).to_contain_text('connected on the server')
     assert pg.locator('input[type=password]').count() == 0  # no key fields
-    pg.select_option('#sProvider', 'fal')
+    pg.click('.setcards button[data-v=fal]')
     expect(pg.locator('#sFalNote')).to_contain_text('connected')
     pg.screenshot(path=f'{shots}/03-settings.png')
     pg.click('#sClose')
@@ -97,7 +97,7 @@ with sync_playwright() as p:
     # Server export
     pg.click('#btnExport')
     expect(pg.locator('#exportDlg')).to_have_class(re.compile('on'))
-    pg.select_option('#exRes', '480p')
+    pg.click('#exResSeg button[data-v="480p"]')
     pg.screenshot(path=f'{shots}/06-export.png')
     pg.click('#exGo')
     expect(pg.locator('#exResult a')).to_be_visible(timeout=240000)
@@ -110,11 +110,34 @@ with sync_playwright() as p:
     subprocess.run(['cp', path, f'{shots}/export.mp4'])
     pg.click('#exX')
 
+    # Redesign: sidebar, stepper, studio rail, storyboard approval, settings page, theme
+    assert pg.locator('#explorer').is_hidden(), 'Studio should hide the sidebar'
+    pg.click('#steps button[data-st=board]'); pg.wait_for_timeout(500)
+    assert pg.locator('#explorer').is_visible() and pg.locator('#exTree .exr.stg.on').inner_text().strip() == 'Storyboard'
+    ok('sidebar shows the open production and its current stage; Studio hides it')
+    pg.locator('#board .panel').first.locator('[data-act=gen]').first.click()
+    expect(pg.locator('#board .panel').first.locator('[data-act=ok]')).to_be_visible(timeout=60000)
+    pg.locator('#board .panel').first.locator('[data-act=ok]').click()
+    expect(pg.locator('#board .panel').first).to_contain_text('Approved')
+    expect(pg.locator('#bdAp')).to_contain_text('1 of')
+    ok('storyboard: sketch frame (fal.ai image job) → needs review → approved')
+    pg.click('#navSettings'); expect(pg.locator('#settings')).to_have_class(re.compile('on'))
+    pg.click('#sThemeSeg button[data-v=light]')
+    assert pg.evaluate("() => document.documentElement.dataset.theme") == 'light'
+    pg.fill('#sWps', '3'); pg.wait_for_timeout(700)
+    assert pg.evaluate("() => S.settings.wps") == 3
+    pg.keyboard.press('Escape'); expect(pg.locator('#settings')).not_to_have_class(re.compile('on'))
+    pg.reload(); pg.wait_for_selector('#stHome.on', timeout=15000)
+    assert pg.evaluate("() => document.documentElement.dataset.theme") == 'light', 'theme survives a reload'
+    ok('settings page saves as you type; theme switch survives a reload')
+    pg.evaluate("() => { setThemePref('dark'); applyTheme(); }")
+    pg.locator('#hCont [data-a=cont], #hCont [data-a=studio]').last.click(); pg.wait_for_timeout(2500)
+
     # Explorer lists renders
-    pg.click('#exRefresh'); pg.wait_for_timeout(1200)
+    pg.evaluate('() => refreshFiles()'); pg.wait_for_timeout(1200)
     kinds = pg.evaluate("() => [...new Set((S.files || []).map(f => f.kind))]")
     assert 'renders' in kinds and 'music' in kinds, kinds
-    ok('explorer lists music and renders folders')
+    ok('project files include the music bed and the render')
 
     # Sign out
     pg.click('#btnSettings'); pg.click('#sLogout')

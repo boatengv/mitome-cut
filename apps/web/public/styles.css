@@ -1,22 +1,22 @@
 :root{
-  --surface:#0B0B0D;--surface-alt:#131316;--raised:#1A1A1F;--hover:#222228;--border:#2A2A31;--border-strong:#3A3A42;
-  --text:#EDEDF0;--muted:#9C9CA6;--action:#F26B1D;--action-text:#0B0B0D;--accent:#FF8F52;--sun:#FFC72C;--error:#FF5C39;
-  --r-xs:4px;--r-ui:6px;--r-sm:8px;--ease:160ms ease-out;--hdr:132px;
-  color-scheme:dark;--wave:#FFC72C;--b-v-bg:#3A1D0D;--b-t-bg:#26262C;--b-a-bg:#3A2E0A;--b-a-fg:#FFC72C;--vob-bg:#2A220B;--vob-bd:#5A4712;--ctx-bg:#1d1d22;--dots:#26262c;--sun-text:#FFC72C;--err-bg:#5a2418;--err-fg:#FFB4A3;--mus-bg:#202026;--loc-fg:#8fc7e0;--loc-bd:#24414f;--acc-bd:#5a2f17
+  /* Graphite (dark). Layered: --surface is the deepest; panels, bars and cards sit on --surface-alt. */
+  --surface:#1C1C20;--surface-alt:#232328;--raised:#2B2B31;--hover:#33333A;--soft:#28282E;--stage:#141417;--border:#3A3A42;--border-strong:#4A4A53;
+  --text:#F0F0F3;--muted:#A6A6B0;--action:#F26B1D;--action-text:#0B0B0D;--accent:#FF8F52;--selected:rgba(242,107,29,.14);--sun:#FFC72C;--error:#FF5C39;
+  --font-ui:'Inter',system-ui,sans-serif;
+  --r-xs:4px;--r-ui:6px;--r-sm:8px;--r-lg:12px;--ease:160ms ease-out;--hdr:132px;
+  color-scheme:dark;--wave:#FFC72C;--b-v-bg:rgba(242,107,29,.2);--b-t-bg:#33333A;--b-a-bg:rgba(255,199,44,.16);--b-a-fg:#FFC72C;--vob-bg:rgba(255,199,44,.08);--vob-bd:rgba(255,199,44,.32);--ctx-bg:#2B2B31;--dots:#2E2E35;--sun-text:#FFC72C;--err-bg:rgba(255,92,57,.16);--err-fg:#FFB4A3;--mus-bg:#28282E;--loc-fg:#8fc7e0;--loc-bd:#2c4a58;--acc-bd:rgba(242,107,29,.45)
 }
-/* Paper (light) theme – Mitome Studios tokens */
+/* Layered white (light) */
 html[data-theme=light]{
-  color-scheme:light;--surface:#FFFFFF;--surface-alt:#FBF6F1;--raised:#FFFFFF;--hover:#FFF3EB;--border:#E7DED6;--border-strong:#CFC3B8;
-  --text:#2B1A10;--muted:#6B5A4E;--action:#F26B1D;--action-text:#2B1A10;--accent:#C2410C;--sun:#FFC72C;--error:#C2410C;
-  --wave:#B98400;--b-v-bg:#FFE0CC;--b-t-bg:#EFE7DF;--b-a-bg:#FFF4D1;--b-a-fg:#7A5200;--vob-bg:#FFF4D1;--vob-bd:#EBCB73;--ctx-bg:#FFFFFF;--dots:#E7DED6;--sun-text:#7A5200;--err-bg:#FFE0CC;--err-fg:#C2410C;--mus-bg:#FBF6F1;--loc-fg:#1F6F8B;--loc-bd:#BFDCE6;--acc-bd:#F9A36E
+  color-scheme:light;--surface:#F3F3F5;--surface-alt:#FFFFFF;--raised:#FFFFFF;--hover:#F0F0F3;--soft:#F7F7F9;--stage:#E9E9ED;--border:#E2E2E7;--border-strong:#CFCFD6;
+  --text:#111113;--muted:#5E5E66;--action:#F26B1D;--action-text:#111113;--accent:#C2410C;--selected:rgba(242,107,29,.08);--sun:#FFC72C;--error:#C2410C;
+  --wave:#E5A800;--b-v-bg:#FFE6D6;--b-t-bg:#F0F0F3;--b-a-bg:#FFF4D1;--b-a-fg:#7A5200;--vob-bg:#FFF8E1;--vob-bd:#EBCB73;--ctx-bg:#FFFFFF;--dots:#E2E2E7;--sun-text:#7A5200;--err-bg:#FFE6D6;--err-fg:#C2410C;--mus-bg:#F7F7F9;--loc-fg:#1F6F8B;--loc-bd:#BFDCE6;--acc-bd:#F9A36E
 }
-html[data-theme=light] #ctx{box-shadow:0 8px 24px rgba(43,26,16,.18)}
 html[data-theme=light] #ctx button.danger,html[data-theme=light] .menu button.danger{color:#C2410C}
 body.home #title,body.home .crumb>span[aria-hidden]{display:none}
 #crumbShow,#crumbSeason{flex-shrink:0;max-width:120px!important}
 html[data-theme=light] .btn.pri:hover{background:#FF7A2E}
-html[data-theme=light] #stage{box-shadow:0 0 0 1px var(--border)}
-html[data-theme=light] .modal{background:rgba(43,26,16,.35)}
+html[data-theme=light] .modal{background:rgba(17,17,19,.32)}
 html,body,header,#explorer,#side,#insp,#tl,.pgcol,.pgside{transition:background-color .2s ease,color .2s ease,border-color .2s ease}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--surface);color:var(--text);font:400 13px/1.4 'Inter',system-ui,sans-serif}

@@ -44,7 +44,10 @@ services:
 
   api:
     profiles: [app]
-    build: .
+    build:
+      context: .
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
     env_file: .env
     environment:
       DATABASE_URL: postgres://mitome:mitome@postgres:5432/mitome
@@ -56,7 +59,10 @@ services:
 
   worker:
     profiles: [app]
-    build: .
+    build:
+      context: .
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
     command: ["node", "--enable-source-maps", "apps/server/dist/worker.js"]
     env_file: .env
     environment:

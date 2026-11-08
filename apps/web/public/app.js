@@ -84,13 +84,11 @@ function showPane(name) {
 $$('#rail button').forEach(b => b.onclick = () => showPane(b.dataset.pane));
 $('#vVoice').onchange = e => { S.settings.voice = e.target.value.trim(); saveSettings(); };
 $('#vModel').onchange = e => { S.settings.elModel = e.target.value.trim(); saveSettings(); };
-$('#sWps2').onchange = e => { S.settings.wps = +e.target.value || 2.6; saveSettings(); };
-$('#sTarget2').onchange = e => { S.settings.target = +e.target.value || 6; saveSettings(); };
+$('#sWps2').onchange = e => { S.settings.wps = +e.target.value || 2.6; saveSettings(); scriptStats(); };
+$('#sTarget2').onchange = e => { S.settings.target = +e.target.value || 6; saveSettings(); scriptStats(); };
 
 // ---------------- Script splitting ----------------
-function splitScript() {
-  const text = $('#script').value.trim();
-  if (!text) { toast('Paste a script first'); return; }
+function scriptChunks(text) {
   const wps = +S.settings.wps || 2.6, target = +S.settings.target || 6, maxW = target * wps;
   const chunks = [];
   text.split(/\n\s*\n/).forEach(p => {
@@ -100,6 +98,12 @@ function splitScript() {
     sents.forEach(se => { se = se.trim(); if (!se) return; const next = cur ? cur + ' ' + se : se; if (cur && next.split(' ').length > maxW) { chunks.push(cur); cur = se; } else cur = next; });
     if (cur) chunks.push(cur);
   });
+  return chunks;
+}
+function splitScript() {
+  const text = $('#script').value.trim();
+  if (!text) { toast('Paste a script first'); return; }
+  const wps = +S.settings.wps || 2.6, chunks = scriptChunks(text);
   if (S.scenes.length && !confirmBox('Replace the current ' + S.scenes.length + ' scenes?')) return;
   stop();
   S.scenes = chunks.map((c, i) => newScene({ vo: c, prompt: 'Visual for narration: "' + c + '"', dur: Math.min(15, Math.max(3, Math.round(c.split(' ').length / wps))), chain: i > 0 }));
@@ -702,16 +706,33 @@ async function quickRecord() {
   rec.start(500); await play();
 }
 const EXP = { id: null, timer: null };
+function exportSlug() { return ($('#title').value || 'video').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'video'; }
+function exportMeta() {
+  const fmtv = $('#exFormat').value, res = $('#exRes').value, secs = totalLen();
+  $('#exName').textContent = exportSlug() + '.' + fmtv;
+  const mbps = fmtv === 'gif' ? 1.2 : { '480p': 1.4, '720p': 2.8, '1080p': 5.5 }[res] * (fmtv === 'mov' ? 1.1 : 1);
+  $('#exSize').textContent = 'About ' + fmtSize(Math.max(1e5, secs * mbps * 125000));
+  $$('.excards button').forEach(b => b.setAttribute('aria-checked', b.dataset.fmt === fmtv));
+  $$('#exResSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === res));
+  $$('#exFpsSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === $('#exFps').value));
+  $('#exClipAudio').disabled = $('#exCaps').disabled = false; if (fmtv === 'gif') $('#exClipAudio').disabled = true;
+}
 function openExport() {
   if (!S.pid) { toast('Open a project first'); return; }
   if (!S.scenes.length) { toast('Nothing to export yet'); return; }
   $('#exCaps').checked = $('#captions').checked;
-  $('#exRes').value = $('#aspect').value === '9:16' && !EXP.id ? $('#exRes').value : $('#exRes').value;
-  $('#exLen').textContent = fmt(totalLen()) + ' · ' + S.scenes.length + ' scenes · ' + $('#aspect').value;
+  $('#exLen').textContent = pl(S.scenes.length, 'scene') + ' · ' + fmt(totalLen()) + ' · ' + $('#aspect').value;
   const missing = S.scenes.filter(s => s.kind !== 'video' || !s.file).length;
-  if (!EXP.id) $('#exResult').textContent = missing ? missing + ' scene' + (missing > 1 ? 's are' : ' is') + ' not generated or still uploading; they render as slates.' : '';
+  $('#exReady').innerHTML = missing ? `<span class="dot busy" aria-hidden="true"></span>${missing} of ${S.scenes.length} not generated · they render as slates` : `<span class="dot ready" aria-hidden="true"></span>All ${S.scenes.length} clips ready`;
+  const c = $('#exThumb'); if (S.scenes[0]) thumb(S.scenes[0], 0, c);
+  if (!EXP.id) $('#exResult').textContent = '';
+  exportMeta();
   $('#exportDlg').classList.add('on');
 }
+$$('.excards button').forEach(b => b.onclick = () => { $('#exFormat').value = b.dataset.fmt; exportMeta(); });
+$$('#exResSeg button').forEach(b => b.onclick = () => { $('#exRes').value = b.dataset.v; exportMeta(); });
+$$('#exFpsSeg button').forEach(b => b.onclick = () => { $('#exFps').value = b.dataset.v; exportMeta(); });
+$('#exClose').onclick = () => closeExport();
 function closeExport() { $('#exportDlg').classList.remove('on'); }
 function showExport(e) {
   const busy = e.status === 'queued' || e.status === 'running';
@@ -783,6 +804,13 @@ async function loadProject(d) {
 // ---------------- Settings ----------------
 const SF = { sLlm: 'llm', sLlmModel: 'llmModel', sImgModel: 'imgModel', sProvider: 'provider', sT2V: 't2v', sI2V: 'i2v', sDurs: 'durs', sVoice: 'voice', sElModel: 'elModel', sWps: 'wps', sTarget: 'target' };
 const onOff = (on, name) => on ? name + ' is connected on the server.' : name + ' is not set up on the server yet (ask the admin to add the key).';
+function syncSettingsControls() {
+  $$('#sThemeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === $('#sTheme').value));
+  const prov = $('#sProvider').value;
+  $$('.setcards button').forEach(b => b.setAttribute('aria-checked', b.dataset.v === prov));
+  $('#falBox').classList.toggle('off', prov !== 'fal');
+  $$('#falBox input').forEach(x => x.disabled = prov !== 'fal');
+}
 function openSettings() {
   for (const [id, k] of Object.entries(SF)) $('#' + id).value = S.settings[k];
   $('#sTheme').value = themePref();
@@ -791,20 +819,32 @@ function openSettings() {
   $('#sLlmNote').textContent = 'fal.ai LLM: ' + (AI.fal ? 'ready' : 'not set up') + ' · Claude API: ' + (AI.anthropic ? 'ready' : 'not set up');
   $('#sElNote').textContent = onOff(AI.elevenlabs, 'ElevenLabs voiceover');
   $('#sAccount').textContent = 'Signed in as ' + (Backend.user ? Backend.user.email : '');
-  $('#falBox').style.display = S.settings.provider === 'fal' ? 'flex' : 'none';
-  $('#settings').classList.add('on'); $('#sProvider').focus();
+  syncSettingsControls();
+  document.body.classList.add('insettings');
+  $('#settings').classList.add('on'); $('#settings .setbody').scrollTop = 0;
+  const cur = $('#sThemeSeg button[aria-pressed=true]'); if (cur) cur.focus();
 }
-function closeSettings() {
+// Settings save as you change them.
+function saveSettingsForm() {
   for (const [id, k] of Object.entries(SF)) S.settings[k] = $('#' + id).value.trim();
   S.settings.wps = +S.settings.wps || 2.6; S.settings.target = +S.settings.target || 6;
   S.settings.durStr = $('#sDurStr').checked;
-  saveSettings(); $('#settings').classList.remove('on'); updatePill(); renderInspector(); renderViewerTop();
+  saveSettings(); updatePill();
+  const t = $('#setSaved'); if (t) { t.textContent = 'Saved'; }
 }
+function closeSettings() {
+  saveSettingsForm();
+  document.body.classList.remove('insettings');
+  $('#settings').classList.remove('on'); renderInspector(); renderViewerTop(); renderExplorer();
+}
+$('#settings').addEventListener('change', e => { if (e.target.id !== 'sTheme') saveSettingsForm(); });
+$('#settings').addEventListener('input', e => { if (e.target.matches('input.inp')) { clearTimeout(saveSettingsForm.t); saveSettingsForm.t = setTimeout(saveSettingsForm, 400); } });
+$$('#sThemeSeg button').forEach(b => b.onclick = () => { $('#sTheme').value = b.dataset.v; setThemePref(b.dataset.v); applyTheme(); syncSettingsControls(); });
+$$('.setcards button').forEach(b => b.onclick = () => { $('#sProvider').value = b.dataset.v; syncSettingsControls(); saveSettingsForm(); });
+$$('.setnav a').forEach(a => a.onclick = e => { e.preventDefault(); const t = $(a.getAttribute('href')); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); $$('.setnav a').forEach(x => x.removeAttribute('aria-current')); a.setAttribute('aria-current', 'true'); });
 function updatePill() { const fal = S.settings.provider === 'fal'; $('#provPill').innerHTML = `<span class="dot ${fal ? (AI.fal ? 'ready' : 'error') : 'demo'}"></span>${fal ? 'fal.ai · ' + esc(S.settings.i2v.split('/')[1] || '') + (AI.fal ? '' : ' (not set up)') : 'Demo mode'}`; }
 $('#sLogout').onclick = () => Backend.logout();
 $('#btnSettings').onclick = openSettings; $('#sClose').onclick = closeSettings; $('#sX').onclick = closeSettings;
-$('#sProvider').onchange = e => $('#falBox').style.display = e.target.value === 'fal' ? 'flex' : 'none';
-$('#settings').addEventListener('click', e => { if (e.target.id === 'settings') closeSettings(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#settings').classList.contains('on')) closeSettings(); });
 
 // ---------------- Assets ----------------
@@ -1137,7 +1177,7 @@ function goStage(name) {
   if (!['home', 'season', 'show'].includes(name) && !S.pid) name = S.season ? 'season' : S.show ? 'show' : 'home';
   if (S.stage === 'scenes' && name !== 'scenes') closePop();
   if (name === 'home') { stop(); } else if (name !== 'season' && name !== 'show') S.lastStage = name;
-  if (name === 'season' || name === 'show') stop(); S.stage = name; document.body.classList.toggle('home', name === 'home'); document.body.classList.toggle('seasonpg', name === 'season' || name === 'show'); if (!['home', 'season', 'show'].includes(name)) saveDraft(); updateCrumb();
+  if (name === 'season' || name === 'show') stop(); S.stage = name; document.body.classList.toggle('home', name === 'home'); document.body.classList.toggle('instudio', name === 'studio'); document.body.classList.toggle('seasonpg', name === 'season' || name === 'show'); if (!['home', 'season', 'show'].includes(name)) saveDraft(); updateCrumb();
   STAGES.forEach(k => $('#' + STAGE_EL[k]).classList.toggle('on', k === name));
   $$('#steps button').forEach(b => { if (b.dataset.st === name) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current'); });
   refreshStage();
@@ -1173,9 +1213,33 @@ function syncName() {
 function scriptStats() {
   syncName();
   const t = $('#script').value.trim(), w = t ? t.split(/\s+/).length : 0, secs = w / (+S.settings.wps || 2.6);
-  $('#scStats').textContent = w ? w + ' words · about ' + fmt(secs) + ' of narration' : '';
+  const sections = t ? t.split(/\n\s*\n/).filter(x => x.trim()).length : 0;
+  $('#scStats').textContent = w ? w + ' words · about ' + Math.round(secs) + ' seconds read aloud · ' + pl(sections, 'section') : '';
   $('#sWps2').value = S.settings.wps; $('#sTarget2').value = S.settings.target;
+  // preview of the scenes a split would create, as proportional bars
+  const pv = $('#scPrev');
+  if (pv) {
+    const ch = t ? scriptChunks(t) : [], wpsv = +S.settings.wps || 2.6, durs = ch.map(c => Math.min(15, Math.max(3, Math.round(c.split(' ').length / wpsv)))), mx = Math.max(1, ...durs);
+    pv.innerHTML = ch.length ? `<div class="pvh"><b>${pl(ch.length, 'scene')}</b><span>${fmt(durs.reduce((a, b) => a + b, 0))}</span></div>` + ch.slice(0, 40).map((c, i) => `<div class="pvr"><span class="n">${i + 1}</span><span class="b"><i style="width:${Math.round(durs[i] / mx * 100)}%"></i></span><span class="d">${durs[i]} s</span></div>`).join('') + (ch.length > 40 ? `<div class="cap">and ${ch.length - 40} more</div>` : '')
+      : '<span class="cap">Write or paste a script to see the scenes it will make.</span>';
+  }
+  scriptNums();
 }
+// Section numbers beside the script: a hidden mirror measures where each section starts.
+function scriptNums() {
+  const ta = $('#script'), box = $('#scNums'); if (!ta || !box || S.stage !== 'script') return;
+  let m = scriptNums.m; if (!m) { m = scriptNums.m = document.createElement('div'); m.className = 'scmirror'; m.setAttribute('aria-hidden', 'true'); document.body.appendChild(m); }
+  const cs = getComputedStyle(ta); m.style.width = ta.clientWidth + 'px'; m.style.font = cs.font; m.style.padding = cs.padding; m.style.lineHeight = cs.lineHeight;
+  const parts = ta.value.split(/(\n\s*\n)/); let html = '', n = 0;
+  parts.forEach(pt => { if (/^\n\s*\n$/.test(pt)) html += esc(pt); else if (pt.trim()) { n++; html += `<span data-n="${n}"></span>` + esc(pt); } else html += esc(pt); });
+  m.innerHTML = html + ' ';
+  const top0 = m.getBoundingClientRect().top;
+  box.innerHTML = [...m.querySelectorAll('span[data-n]')].map(sp => `<span style="top:${sp.getBoundingClientRect().top - top0 - ta.scrollTop}px">${sp.dataset.n}</span>`).join('');
+}
+$('#script').addEventListener('scroll', () => scriptNums());
+window.addEventListener('resize', () => scriptNums());
+$('#scImport').onchange = async e => { const f = e.target.files[0]; if (!f) return; const txt = await f.text(); const ta = $('#script'); ta.value = ta.value.trim() ? ta.value.replace(/\s*$/, '') + '\n\n' + txt : txt; ta.dispatchEvent(new Event('input')); e.target.value = ''; toast('Imported ' + f.name); };
+$('#scPaste').onclick = async () => { try { const txt = await navigator.clipboard.readText(); const ta = $('#script'); const a = ta.selectionStart, b = ta.selectionEnd; ta.setRangeText(txt, a, b, 'end'); ta.dispatchEvent(new Event('input')); ta.focus(); } catch (e) { toast('Paste with Ctrl+V (or ⌘V); this browser blocks reading the clipboard.'); } };
 $('#script').addEventListener('input', () => { scriptStats(); refreshSteps(); });
 $('#scName').addEventListener('input', () => { if (S.pid) renameEpisode(S.pid, $('#scName').value); });
 $('#title').addEventListener('input', () => { const sc = $('#scName'); if (sc) sc.value = $('#title').value; renderExplorer(); });
@@ -1184,31 +1248,48 @@ $('#style2').addEventListener('input', () => { $('#style').value = $('#style2').
 // Scenes stage: editable cards
 let flowTimer = 0;
 function flowSoon() { clearTimeout(flowTimer); flowTimer = setTimeout(() => { renderFlow(); }, 250); }
+function trLabel(s) { if (s.chain && s.transition === 'cut') return 'Continue from last frame'; return (TR_NAMES[s.transition] || 'Cut') + (s.transition !== 'cut' ? ' · ' + s.tdur + ' s' : '') + (s.chain ? ' · from last frame' : ''); }
 function renderSceneCards() {
   const box = $('#sceneCards'); if (!box) return;
   $('#scnCount').textContent = S.scenes.length ? S.scenes.length + ' · ' + fmt(totalLen()) : '';
   box.innerHTML = '';
   if (!S.scenes.length) { box.innerHTML = '<p class="muted" style="padding:6px 2px">No scenes yet. Split your script in the Script stage, or create one here.</p>'; return; }
   S.scenes.forEach((s, i) => {
+    if (i > 0) {
+      const t = document.createElement('div'); t.className = 'trlink' + (S.trOpen === s.id ? ' open' : '');
+      t.innerHTML = `<button class="trpill" aria-expanded="${S.trOpen === s.id}" title="Transition from scene ${i} to ${i + 1}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>${esc(trLabel(s))}</button>
+        <div class="trbar"><select data-k="transition" aria-label="Transition">${Object.entries(TR_NAMES).map(([k, l]) => `<option value="${k}" ${s.transition === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <input type="number" data-k="tdur" min="0.1" max="2" step="0.1" value="${s.tdur}" aria-label="Transition seconds" ${s.transition === 'cut' ? 'disabled' : ''}><span class="cap">s</span>
+        <label><input type="checkbox" data-k="chain" ${s.chain ? 'checked' : ''}>Continue from last frame</label>
+        <label><input type="checkbox" data-k="history" ${s.history ? 'checked' : ''}>Carry style forward</label></div>`;
+      t.querySelector('.trpill').onclick = () => { S.trOpen = S.trOpen === s.id ? null : s.id; renderSceneCards(); };
+      t.querySelectorAll('[data-k]').forEach(el => { el.onchange = () => { const k = el.dataset.k; s[k] = el.type === 'checkbox' ? el.checked : k === 'tdur' ? Math.max(0.1, +el.value || 0.5) : el.value; saveDraft(); flowSoon(); renderSceneCards(); }; });
+      box.appendChild(t);
+    }
     const st = statusOf(s), c = document.createElement('div');
     c.className = 'scard' + (s.id === S.sel ? ' sel' : ''); c.dataset.id = s.id;
-    c.innerHTML = `${i > 0 ? `<div class="trbar"><span style="color:var(--text);font-weight:500">${i} → ${i + 1}</span>
-        <select data-k="transition" aria-label="Transition">${Object.entries(TR_NAMES).map(([k, l]) => `<option value="${k}" ${s.transition === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <input type="number" data-k="tdur" min="0.1" max="2" step="0.1" value="${s.tdur}" aria-label="Transition seconds" ${s.transition === 'cut' ? 'disabled' : ''}>s
-        <label><input type="checkbox" data-k="chain" ${s.chain ? 'checked' : ''}>Continue from last frame</label>
-        <label><input type="checkbox" data-k="history" ${s.history ? 'checked' : ''}>History</label></div>` : ''}
-      <div class="shd"><span class="no">${String(i + 1).padStart(2, '0')}</span><input data-k="label" value="${esc(s.label)}" placeholder="Scene ${i + 1} name"><span class="dot ${st.k}" title="${st.label}"></span>
-        <button class="ib" data-act="del" aria-label="Delete scene" style="width:26px;height:26px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>
-      <div class="field"><span class="lbl">Script</span><textarea class="inp" rows="2" data-k="vo" placeholder="What is said">${esc(s.vo)}</textarea></div>
-      <div class="field"><span class="lbl">Scene description (what we see)</span><textarea class="inp" rows="3" data-k="prompt" placeholder="Action, camera, framing, setting">${esc(s.prompt)}</textarea></div>
-      <div style="display:flex;gap:6px"><button class="btn sm" data-act="ins" style="flex:1">+ Scene after</button><button class="btn sm" data-act="studio" style="flex:1">Open in Studio</button></div>`;
-    c.addEventListener('focusin', () => { if (S.sel !== s.id) { S.sel = s.id; markFlowSel(); } });
+    c.innerHTML = `<div class="scmain"><span class="scth"><canvas width="224" height="126"></canvas></span>
+        <div class="sctx"><div class="sch"><span class="no">${String(i + 1).padStart(2, '0')}</span><b>${esc(s.label || 'Scene ' + (i + 1))}</b><span class="d">${fmt(segLen(s))}</span>
+          <button class="ib scmore" aria-label="Actions for scene ${i + 1}" title="More">⋯</button></div>
+          <p class="vo">${esc(s.vo || 'No script line yet')}</p>
+          <p class="we"><b>We see:</b> ${esc(s.prompt || 'Not described yet')}</p>
+          <span class="stl"><span class="dot ${st.k}" aria-hidden="true"></span>${st.label}</span></div></div>
+      <div class="scedit">
+        <div class="field"><span class="lbl">Scene name</span><input class="inp" data-k="label" value="${esc(s.label)}" placeholder="Scene ${i + 1}"></div>
+        <div class="field"><span class="lbl">Script</span><textarea class="inp" rows="2" data-k="vo" placeholder="What is said">${esc(s.vo)}</textarea></div>
+        <div class="field"><span class="lbl">What we see</span><textarea class="inp" rows="3" data-k="prompt" placeholder="Action, camera, framing, setting">${esc(s.prompt)}</textarea></div>
+        <div class="scact"><button class="btn sm" data-act="ins">+ Scene after</button><button class="btn sm" data-act="studio">Open in Studio</button><span class="sp"></span><button class="btn sm ghost" data-act="del">Delete</button></div>
+      </div>`;
+    thumb(s, i, c.querySelector('canvas'));
+    c.querySelector('.scmain').onclick = e => { if (e.target.closest('.scmore')) return; if (S.sel !== s.id) { S.sel = s.id; markFlowSel(); } };
+    c.querySelector('.scmore').onclick = e => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); S.sel = s.id; markFlowSel(); showCtx(r.left - 180, r.bottom + 4, { dataset: { kind: 'scene', id: s.id, open: 'scene:' + s.id }, querySelector: () => null }); };
     c.querySelectorAll('[data-k]').forEach(el => {
-      const k = el.dataset.k, ev = el.type === 'checkbox' || el.tagName === 'SELECT' ? 'onchange' : 'oninput';
-      el[ev] = () => {
-        s[k] = el.type === 'checkbox' ? el.checked : k === 'tdur' ? Math.max(0.1, +el.value || 0.5) : el.value;
-        if (k === 'transition') { const d = c.querySelector('[data-k=tdur]'); if (d) d.disabled = s.transition === 'cut'; }
-        saveDraft(); flowSoon(); if (k === 'vo' || k === 'label') refreshSteps();
+      const k = el.dataset.k;
+      el.oninput = () => {
+        s[k] = el.value; saveDraft(); flowSoon(); if (k === 'vo' || k === 'label') refreshSteps();
+        if (k === 'label') c.querySelector('.sch b').textContent = s.label || 'Scene ' + (i + 1);
+        if (k === 'vo') c.querySelector('.vo').textContent = s.vo || 'No script line yet';
+        if (k === 'prompt') c.querySelector('.we').innerHTML = '<b>We see:</b> ' + esc(s.prompt || 'Not described yet');
       };
     });
     c.querySelector('[data-act=del]').onclick = () => deleteScene(s);
@@ -1219,24 +1300,26 @@ function renderSceneCards() {
 }
 $('#newHistS').onchange = e => { $('#newHist').checked = e.target.checked; };
 $('#newHist').onchange = e => { $('#newHistS').checked = e.target.checked; };
-$('#scnAdd').onclick = () => { createScene(); renderSceneCards(); setTimeout(() => { const c = $('.scard.sel textarea'); if (c) c.focus(); }, 60); };
+$('#scnAdd').onclick = () => { createScene(); renderSceneCards(); setTimeout(() => { const c = $('.scard.sel input[data-k=label]'); if (c) c.focus(); }, 60); };
 
 // Assets stage: matrix
 function renderMatrix() {
   const m = $('#matrix'); if (!m) return;
   if (!S.scenes.length || !S.assets.length) { m.innerHTML = `<p class="muted" style="padding:14px">${!S.scenes.length ? 'Create scenes first.' : 'Add assets on the left, or use “Find in script”.'}</p>`; return; }
-  let t = '<table><thead><tr><th class="sc">Scene</th>' + S.assets.map(a => `<th><div class="ah" data-aid="${a.id}" title="${esc(a.desc || a.name)}"><span class="aimg" style="${a.img ? `background-image:url('${a.img.replace(/'/g, '%27')}')` : ''}">${a.img ? '' : AICON[a.type]}</span><b>${esc(a.name)}</b><span class="atype ${a.type}">${ATYPE[a.type]}</span></div></th>`).join('') + '</tr></thead><tbody>';
-  S.scenes.forEach((s, i) => {
-    t += `<tr><th class="sc"><div class="sct"><span class="no">${i + 1}</span><span>${esc(s.label ? s.label + ' – ' : '')}${esc(s.vo || s.prompt || 'Empty scene')}</span></div></th>` +
-      S.assets.map(a => { const on = (s.assets || []).includes(a.id); return `<td><button class="cell" data-s="${s.id}" data-a="${a.id}" aria-pressed="${on}" aria-label="${esc(a.name)} in scene ${i + 1}">${on ? '✓' : ''}</button></td>`; }).join('') + '</tr>';
+  // scenes are columns (thumbnail + number), assets are rows
+  let t = '<table><thead><tr><th class="an">Asset</th>' + S.scenes.map((s, i) => `<th class="sh" title="Scene ${i + 1}: ${esc(s.vo || s.prompt || '')}"><canvas width="64" height="36" data-i="${i}"></canvas><span>${i + 1}</span></th>`).join('') + '</tr></thead><tbody>';
+  S.assets.forEach(a => {
+    t += `<tr class="${a.id === S.aSel ? 'sel' : ''}"><th class="an"><button class="ah" data-aid="${a.id}" title="${esc(a.desc || a.name)}"><b>${esc(a.name)}</b><span>· ${ATYPE[a.type]}</span></button></th>` +
+      S.scenes.map((s, i) => { const on = (s.assets || []).includes(a.id); return `<td><button class="cell" data-s="${s.id}" data-a="${a.id}" aria-pressed="${on}" aria-label="${esc(a.name)} in scene ${i + 1}"></button></td>`; }).join('') + '</tr>';
   });
   m.innerHTML = t + '</tbody></table>';
+  m.querySelectorAll('canvas[data-i]').forEach(c => { const i = +c.dataset.i; thumb(S.scenes[i], i, c); });
   m.querySelectorAll('.cell').forEach(b => b.onclick = () => {
     const s = S.scenes.find(x => x.id === b.dataset.s), id = b.dataset.a; s.assets = s.assets || [];
     s.assets = s.assets.includes(id) ? s.assets.filter(x => x !== id) : [...s.assets, id];
-    const on = s.assets.includes(id); b.setAttribute('aria-pressed', on); b.textContent = on ? '✓' : ''; saveDraft(); renderAssets();
+    b.setAttribute('aria-pressed', s.assets.includes(id)); saveDraft(); renderAssets();
   });
-  m.querySelectorAll('.ah').forEach(d => d.onclick = () => { S.aSel = d.dataset.aid; renderAssets(); const el = $('.acard[aria-expanded=true]'); if (el) el.scrollIntoView({ block: 'nearest' }); });
+  m.querySelectorAll('.ah').forEach(d => d.onclick = () => { S.aSel = d.dataset.aid; renderAssets(); renderMatrix(); const el = $('.acard[aria-expanded=true]'); if (el) el.scrollIntoView({ block: 'nearest' }); });
 }
 $('#mxAuto').onclick = () => { const n = autoTag(S.scenes); renderMatrix(); renderAssets(); toast(n ? n + ' new tag(s) added' : 'No new mentions found – add script keywords to your assets'); };
 
@@ -1269,33 +1352,51 @@ function sketchPrompt(s) {
   const mc = mustContain(s), ar = $('#aspect').value === '9:16' ? 'vertical 9:16' : 'widescreen 16:9';
   return `Black-and-white storyboard sketch, loose pencil lines on white paper, ${ar} frame, clear staging and camera angle. ${(s.prompt || s.vo || '').replace(/[.\s]+$/, '')}.${mc ? ' Must contain: ' + mc + '.' : ''} No colour, no text.`;
 }
+function boardState(s) { return s.approved ? 'ok' : s.board ? 'review' : 'text'; }
+const BD_LABEL = { ok: 'Approved', review: 'Needs review', text: 'Text only' }, BD_DOT = { ok: 'ready', review: 'busy', text: 'none' };
 function renderBoard() {
   const b = $('#board'); if (!b) return;
   const tall = $('#aspect').value === '9:16'; b.classList.toggle('tall', tall);
-  const n = S.scenes.length, ap = S.scenes.filter(s => s.approved).length, sk = S.scenes.filter(s => s.board).length;
-  $('#bdStats').textContent = n ? `${n} frames · ${sk} sketched · ${ap} approved · ${fmt(totalLen())}` : '';
+  const n = S.scenes.length, f = S.bdFilter || 'all';
+  renderBoardStats();
+  const counts = { all: n, review: 0, text: 0, ok: 0 }; S.scenes.forEach(x => counts[boardState(x)]++);
+  $('#bdFilter').innerHTML = [['all', 'All'], ['review', 'Needs review'], ['text', 'Text only'], ['ok', 'Approved']].map(([k, l]) => `<button data-f="${k}" aria-pressed="${f === k}">${l} <span>${counts[k]}</span></button>`).join('');
+  $$('#bdFilter button').forEach(x => x.onclick = () => { S.bdFilter = x.dataset.f; renderBoard(); });
   b.innerHTML = '';
   if (!n) { b.innerHTML = '<p class="muted">No scenes yet. Start in Script or Scenes.</p>'; return; }
   S.scenes.forEach((s, i) => {
-    const as = (s.assets || []).map(id => S.assets.find(a => a.id === id)).filter(Boolean);
-    const p = document.createElement('div'); p.className = 'panel' + (s.approved ? ' ok' : '');
-    const trk = i === 0 ? 'OPEN' : s.chain ? (s.transition === 'cut' ? 'EXTEND' : 'EXTEND · ' + TR_NAMES[s.transition]) : (s.transition === 'cut' ? 'CUT' : TR_NAMES[s.transition]);
-    p.innerHTML = `<div class="ptr"><span class="k">${i === 0 ? '●' : '→'} ${esc(trk)}</span>${i > 0 && s.transition !== 'cut' ? '<span>' + s.tdur.toFixed(1) + 's</span>' : ''}${s.history ? '<span style="color:var(--sun-text)">history</span>' : ''}<span style="margin-left:auto">${fmt(segLen(s))}</span></div>
-      <div class="phd"><span class="no">${String(i + 1).padStart(2, '0')}</span><b>${esc(s.label || 'Scene ' + (i + 1))}</b><label class="ck" title="Approve this frame"><input type="checkbox" data-act="ok" ${s.approved ? 'checked' : ''}> Approved</label></div>
-      <div class="pfr"><canvas width="${tall ? 360 : 640}" height="${tall ? 640 : 360}"></canvas><span class="src"></span></div>
-      <div class="pbody"><div class="shot">${esc(s.prompt || 'No scene description yet.')}</div>${s.vo ? `<div class="line">“${esc(s.vo)}”</div>` : ''}
-        ${as.length ? `<div class="chips">${as.map(a => `<span class="chipb" style="height:22px">${a.img ? `<img src="${esc(a.img)}" alt="">` : ''}${esc(a.name)}</span>`).join('')}</div>` : ''}</div>
-      <div class="pact"><button class="btn sm" data-act="gen">${s.board ? 'Re-sketch' : 'Sketch frame'}</button><label class="btn sm" style="margin:0"><input type="file" accept="image/*" hidden data-act="up">Upload</label><button class="btn sm" data-act="edit">Edit</button></div>`;
-    const cv2 = p.querySelector('canvas'), draw = () => { p.querySelector('.src').textContent = boardFrame(s, i, cv2, draw); };
-    draw();
-    p.querySelector('[data-act=ok]').onchange = e => { s.approved = e.target.checked; p.classList.toggle('ok', s.approved); saveDraft(); refreshSteps(); renderBoardStats(); };
-    p.querySelector('[data-act=gen]').onclick = () => sketchScenes([s]);
-    p.querySelector('[data-act=up]').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = async () => { await setBoard(s, r.result); saveDraft(); renderBoard(); }; r.readAsDataURL(f); };
-    p.querySelector('[data-act=edit]').onclick = () => { S.sel = s.id; goStage('scenes'); markFlowSel(); };
+    const state = boardState(s); if (f !== 'all' && f !== state) return;
+    const p = document.createElement('div'); p.className = 'panel bd-' + state;
+    const trk = i === 0 ? 'OPEN' : s.chain ? 'EXTEND' : (s.transition === 'cut' ? 'CUT' : (TR_NAMES[s.transition] || 'Cut').toUpperCase());
+    const acts = state === 'ok' ? `<button class="btn sm ghost" data-act="gen">Redo</button>${upBtn()}`
+      : state === 'review' ? `<button class="btn sm pri" data-act="ok"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Approve</button><button class="btn sm" data-act="gen">Redo</button>`
+      : upBtn();
+    p.innerHTML = `<div class="pfr">${s.board ? `<canvas width="${tall ? 360 : 640}" height="${tall ? 640 : 360}"></canvas>` : `<div class="ptext"><span>${esc(s.prompt || 'No scene description yet.')}</span><button class="btn sm" data-act="gen"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg>Sketch frame</button></div>`}
+        <span class="fchip l">${esc(trk)}</span><span class="fchip r">${fmt(segLen(s))}</span></div>
+      <div class="pbody"><div class="phd"><span class="no">${String(i + 1).padStart(2, '0')}</span><b>${esc(s.label || 'Scene ' + (i + 1))}</b><span class="stl"><span class="dot ${BD_DOT[state]}" aria-hidden="true"></span>${BD_LABEL[state]}</span></div>
+        ${s.vo ? `<div class="line">“${esc(s.vo)}”</div>` : '<div class="line muted">No script line.</div>'}</div>
+      <div class="pact">${acts}<span class="sp"></span><button class="ib" data-act="more" aria-label="More actions for scene ${i + 1}" title="More">⋯</button></div>`;
+    function upBtn() { return `<label class="btn sm ghost" style="margin:0"><input type="file" accept="image/*" hidden data-act="up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg>Upload</label>`; }
+    const cv2 = p.querySelector('canvas'); if (cv2) { const draw = () => boardFrame(s, i, cv2, draw); draw(); }
+    const ok = p.querySelector('[data-act=ok]'); if (ok) ok.onclick = () => { s.approved = true; saveDraft(); refreshSteps(); renderBoard(); };
+    p.querySelectorAll('[data-act=gen]').forEach(x => x.onclick = () => sketchScenes([s]));
+    const up = p.querySelector('[data-act=up]'); if (up) up.onchange = e => { const fl = e.target.files[0]; if (!fl) return; const r = new FileReader(); r.onload = async () => { await setBoard(s, r.result); saveDraft(); renderBoard(); }; r.readAsDataURL(fl); };
+    p.querySelector('[data-act=more]').onclick = e => {
+      const r = e.currentTarget.getBoundingClientRect(), items = [['Edit in Scenes', () => { S.sel = s.id; goStage('scenes'); markFlowSel(); }]];
+      if (s.approved) items.push(['Mark as not approved', () => { s.approved = false; saveDraft(); refreshSteps(); renderBoard(); }]);
+      else if (s.board) items.push(['Approve', () => { s.approved = true; saveDraft(); refreshSteps(); renderBoard(); }]);
+      if (s.board) items.push(['Redo sketch', () => sketchScenes([s])]);
+      items.push(['Upload a frame…', () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = () => { const fl = inp.files[0]; if (!fl) return; const rd = new FileReader(); rd.onload = async () => { await setBoard(s, rd.result); saveDraft(); renderBoard(); }; rd.readAsDataURL(fl); }; inp.click(); }]);
+      showCtx(r.left - 160, r.bottom + 4, { dataset: { kind: 'custom', id: '' }, items, focus: () => e.target.focus() });
+    };
     b.appendChild(p);
   });
 }
-function renderBoardStats() { const n = S.scenes.length, ap = S.scenes.filter(s => s.approved).length, sk = S.scenes.filter(s => s.board).length; $('#bdStats').textContent = `${n} frames · ${sk} sketched · ${ap} approved · ${fmt(totalLen())}`; }
+function renderBoardStats() {
+  const n = S.scenes.length, ap = S.scenes.filter(s => s.approved).length, sk = S.scenes.filter(s => s.board).length;
+  $('#bdStats').textContent = n ? `${n} frames · ${sk} sketched · ${ap} approved · ${fmt(totalLen())}` : '';
+  const a = $('#bdAp'); if (a) a.textContent = n ? `${ap} of ${n} approved` : ''; const bar = $('#bdApBar'); if (bar) bar.style.width = (n ? ap / n * 100 : 0) + '%';
+}
 async function sketchScenes(list) {
   if (!list.length) { toast('Every frame already has a sketch'); return; }
   if (S.settings.provider === 'fal' && list.length > 1 && !confirmBox('Sketch ' + list.length + ' frames with ' + S.settings.imgModel + '? This spends fal.ai credits.')) return;
@@ -1371,7 +1472,7 @@ async function storageUsage() {
     const proj = (S.files || []).reduce((n, f) => n + (f.size || 0), 0);
     const txt = (S.pid && S.stage !== 'home' ? 'This project ' + fmtSize(proj) + ' · ' : '') + 'Account storage ' + fmtSize(used) + ' of ' + fmtSize(q);
     const ks = $('#kStorage'); if (ks) ks.textContent = fmtSize(used);
-    const u = $('#exUsage'); if (u) u.textContent = txt; const b = $('#exUsageBar'); if (b) b.style.width = Math.min(100, used / q * 100).toFixed(1) + '%';
+    const u = $('#exUsage'); if (u) { u.textContent = fmtSize(used) + ' of ' + fmtSize(q); u.title = txt; } const b = $('#exUsageBar'); if (b) b.style.width = Math.min(100, used / q * 100).toFixed(1) + '%';
     const hn = $('#hNote'); if (hn && S.stage === 'home') hn.textContent = 'Everything is saved to your Mitome Cut account: scripts, scenes, assets, storyboard frames, clips, voices and renders. ' + fmtSize(used) + ' used of ' + fmtSize(q) + ' available.';
   } catch (e) {}
 }
@@ -1390,7 +1491,7 @@ async function newProject(d) { S.show = null; S.season = null; S.pid = uid(); aw
 async function openProject(id) { const d = store.get('ms_proj_' + id, null); if (!d) { toast('Project not found'); return; } S.pid = id; await loadProject(d); goStage(d.stage || 'studio'); }
 function prodStats(d) {
   const sc = d.scenes || [], n = sc.length;
-  return { n, ap: sc.filter(s => s.approved).length, clips: sc.filter(s => s.file || s.remote).length, demo: sc.filter(s => s.kind === 'demo' && !s.file).length, voices: sc.filter(s => s.voFile).length, script: !!(d.script || '').trim(), boardFile: (sc.find(s => s.boardFile) || {}).boardFile, clipScene: sc.find(s => s.file) };
+  return { n, ap: sc.filter(s => s.approved).length, clips: sc.filter(s => s.file || s.remote).length, demo: sc.filter(s => s.kind === 'demo' && !s.file).length, voices: sc.filter(s => s.voFile).length, script: !!(d.script || '').trim(), boardFile: (sc.find(s => s.boardFile) || {}).boardFile, clipScene: sc.find(s => s.file), assets: (d.assets || []).length, sketched: sc.filter(s => s.boardFile || s.board).length };
 }
 function phaseOf(st) { return !st.n ? 'writing' : st.ap < st.n ? 'storyboard' : st.clips < st.n ? 'shooting' : 'edit'; }
 const PHASES = { writing: 'Writing', storyboard: 'Storyboard', shooting: 'Shooting', edit: 'Edit' };
@@ -1445,62 +1546,95 @@ function renderFlowStrip(items, shows) {
     if (k === 'premiere') toast('Press Export (top right) to render the finished film');
   });
 }
+// Pipeline stage of an episode or movie, for Home.
+const PIPE = [['script', 'Script'], ['scenes', 'Scenes'], ['assets', 'Assets'], ['board', 'Storyboard'], ['studio', 'Studio'], ['premiere', 'Premiere']];
+function pipeOf(st) { if (!st.n) return 'script'; if (st.clips >= st.n) return 'premiere'; if (st.ap >= st.n) return 'studio'; if (st.sketched) return 'board'; if (st.assets) return 'assets'; return 'scenes'; }
+const PIPE_LABEL = Object.fromEntries(PIPE);
+function nextHint(st) {
+  const k = pipeOf(st);
+  if (k === 'script') return st.script ? 'split the script into scenes.' : 'write the script.';
+  if (k === 'scenes') return 'find the cast, places and props in your scenes.';
+  if (k === 'assets') return 'sketch the storyboard frames.';
+  if (k === 'board') { const left = st.n - st.ap; return 'review ' + pl(st.sketched - st.ap > 0 ? st.sketched - st.ap : left, 'frame') + (st.sketched < st.n ? ' and sketch the last ' + (st.n - st.sketched) : '') + '.'; }
+  if (k === 'studio') return 'generate ' + pl(st.n - st.clips, 'clip') + ' and add voiceover.';
+  return 'export and premiere.';
+}
+function statusLine(k) { const dot = k === 'premiere' ? 'ready' : k === 'script' ? 'none' : 'busy'; return `<span class="stl"><span class="dot ${dot}" aria-hidden="true"></span>${PIPE_LABEL[k]}</span>`; }
 function renderHome() {
   const items = libraryItems(), shows = store.get('ms_shows', []).map(s => store.get('ms_show_' + s.id, null)).filter(Boolean);
-  const seasons = shows.reduce((n, s) => n + (s.seasons || []).length, 0), eps = items.filter(i => i.kind === 'episode').length, movies = items.filter(i => i.kind === 'movie').length;
-  const tot = items.reduce((a, i) => ({ n: a.n + i.st.n, ap: a.ap + i.st.ap, clips: a.clips + i.st.clips, voices: a.voices + i.st.voices }), { n: 0, ap: 0, clips: 0, voices: 0 });
-  const kpi = (v, l, id) => `<div class="kpi"><b ${id ? `id="${id}"` : ''}>${v}</b><span>${l}</span></div>`;
-  $('#hKpis').innerHTML = kpi(shows.length, 'TV shows') + kpi(seasons, 'Seasons') + kpi(eps, 'Episodes') + kpi(movies, 'Movies') + kpi(tot.n, 'Scenes') + kpi(tot.ap + '/' + tot.n, 'Frames approved') + kpi(tot.clips, 'Clips made') + kpi('…', 'Storage used', 'kStorage');
-  const open = it => it.kind === 'episode' || it.kind === 'movie' ? openProject(it.id) : null;
-  const thumbFor = async (it, el) => { const d = store.get('ms_proj_' + it.id, {}) || {}; const s = (d.scenes || []).find(x => x.boardFile) || null; const u = s ? await vaultURL(s.boardFile) : null; if (u) el.style.backgroundImage = `url('${u}')`; };
-  // continue
-  const cont = $('#hCont'); cont.innerHTML = '';
-  const recent = items.slice().sort((a, b) => b.updated - a.updated).slice(0, 4);
-  if (!recent.length) cont.innerHTML = '<div class="empty-dash">Nothing in production yet. Start a TV show or a movie above, or open the sample.</div>';
-  recent.forEach(it => {
-    const ph = phaseOf(it.st), c = document.createElement('button'); c.className = 'ccard';
-    c.innerHTML = `<div class="cth"><span class="phase ${ph} ph">${PHASES[ph]}</span></div><div class="cb"><b>${esc(it.title)}</b><span>${esc(it.sub)} · ${pl(it.st.n, 'scene')} · ${ago(it.updated)}</span><div class="bar" style="margin-top:6px"><i style="width:${it.st.n ? Math.round((it.st.ap + it.st.clips) / (2 * it.st.n) * 100) : 0}%"></i></div></div>`;
-    c.onclick = () => open(it); cont.appendChild(c); thumbFor(it, c.querySelector('.cth'));
+  const eps = items.filter(i => i.kind === 'episode').length, movies = items.filter(i => i.kind === 'movie');
+  const tot = items.reduce((a, i) => ({ n: a.n + i.st.n, ap: a.ap + i.st.ap, clips: a.clips + i.st.clips }), { n: 0, ap: 0, clips: 0 });
+  const openIt = (it, stage) => openProject(it.id).then(() => { if (stage) goStage(stage); });
+  const thumbFor = async (it, el) => { const f = it.st.boardFile; const u = f ? await vaultURL(f).catch(() => null) : null; if (u) { el.style.backgroundImage = `url('${u}')`; el.classList.add('img'); } };
+  const cover = (id, type) => coverFor(id, type).replace('class="cv"', 'class="cv big"');
+
+  // continue where you left off
+  const cont = $('#hCont'), it = items.slice().sort((a, b) => b.updated - a.updated)[0];
+  if (!it) cont.innerHTML = `<div class="hempty"><b>Nothing in production yet</b><span>Start a TV show or a movie, or open the sample to look around.</span></div>`;
+  else {
+    const st = it.st, k = pipeOf(st), segs = [['Script', st.script || st.n ? 1 : 0], ['Scenes', st.n ? 1 : 0], ['Assets', st.assets ? 1 : 0], ['Storyboard', st.n ? st.ap / st.n : 0], ['Studio', st.n ? st.clips / st.n : 0]];
+    const curIdx = { script: 0, scenes: 1, assets: 2, board: 3, studio: 4, premiere: 4 }[k];
+    const target = k === 'premiere' ? 'studio' : k;
+    cont.innerHTML = `<div class="hcth">${cover(it.id, it.kind === 'episode' ? 'show' : 'movie')}<span class="hcbadge">${st.n ? pl(st.n, 'scene') : 'No scenes yet'}</span></div>
+      <div class="hcb"><span class="cap2">Continue where you left off</span>
+        <div><div class="hct">${esc(it.title)}</div><div class="hcm">${esc(it.sub)} · ${pl(st.n, 'scene')} · edited ${ago(it.updated)}</div></div>
+        <div class="hseg">${segs.map(([l, f], i) => `<div><div class="bar"><i style="width:${Math.round(Math.min(1, f) * 100)}%"></i></div><span class="${i === curIdx ? 'cur' : f ? 'done' : ''}">${l}</span></div>`).join('')}</div>
+        <div class="hnext"><span class="dot ${k === 'premiere' ? 'ready' : 'busy'}" aria-hidden="true"></span><span><b>Next:</b> ${esc(nextHint(st))}</span></div>
+        <div class="hca"><button class="btn pri" data-a="cont">Continue in ${PIPE_LABEL[target]}</button>${target !== 'studio' ? '<button class="btn" data-a="studio">Open in Studio</button>' : ''}</div></div>`;
+    cont.querySelector('[data-a=cont]').onclick = () => openIt(it, target);
+    const sb = cont.querySelector('[data-a=studio]'); if (sb) sb.onclick = () => openIt(it, 'studio');
+    thumbFor(it, cont.querySelector('.cv'));
+  }
+
+  // totals
+  const stat = (v, l, id) => `<div><b ${id ? `id="${id}"` : ''}>${v}</b><span>${l}</span></div>`;
+  $('#hKpis').innerHTML = stat(shows.length + movies.length, 'Productions') + stat(eps, 'Episodes') + stat(tot.n, 'Scenes') + stat(tot.ap + ' / ' + tot.n, 'Frames approved') + stat(tot.clips, 'Clips made') + stat('…', 'Storage', 'kStorage');
+
+  // productions
+  const f = S.homeFilter || 'all', prod = $('#hProd'); prod.innerHTML = '';
+  $$('#hFilter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === f));
+  const card = (o) => {
+    const c = document.createElement('div'); c.className = 'pcard'; c.tabIndex = 0; c.setAttribute('role', 'button');
+    c.innerHTML = `<div class="pcth">${cover(o.id, o.type)}</div><div class="pcb"><div class="pcr"><span class="tchip">${o.type === 'show' ? 'TV SHOW' : 'MOVIE'}</span>${statusLine(o.k)}</div><b class="nm">${esc(o.title)}</b><span class="cap2">${esc(o.meta)}</span></div><button class="ib pcmore" aria-label="More actions for ${esc(o.title)}" title="More actions">⋯</button>`;
+    c.onclick = e => { if (!e.target.closest('.pcmore, input')) o.open(); };
+    c.onkeydown = e => { if (e.key === 'Enter' && e.target === c) o.open(); };
+    c.dataset.kind = o.type === 'show' ? 'showrow' : 'movierow'; c.dataset.id = o.id;
+    const menu = (x, y) => showCtx(x, y, c);
+    c.querySelector('.pcmore').onclick = e => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); menu(r.left, r.bottom + 4); };
+    c.oncontextmenu = e => { e.preventDefault(); menu(e.clientX, e.clientY); };
+    if (o.thumb) thumbFor(o.thumb, c.querySelector('.cv'));
+    prod.appendChild(c);
+  };
+  if (f !== 'movie') shows.forEach(sh => {
+    const its = items.filter(i => i.show && i.show.id === sh.id), firstSeason = its[0];
+    const k = its.length ? PIPE[Math.min(...its.map(i => PIPE.findIndex(p => p[0] === pipeOf(i.st))))][0] : 'script';
+    card({ id: sh.id, type: 'show', title: sh.title || 'Untitled show', k, meta: pl((sh.seasons || []).length, 'season') + ' · ' + pl(its.length, 'episode'), open: () => openShow(sh.id), thumb: firstSeason });
   });
+  if (f !== 'show') movies.forEach(m => card({ id: m.id, type: 'movie', title: m.title, k: pipeOf(m.st), meta: pl(m.st.n, 'scene') + ' · edited ' + ago(m.updated), open: () => openProject(m.id), thumb: m }));
+  const start = document.createElement('div'); start.className = 'pstart';
+  start.innerHTML = `<span class="pplus" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><b>Start a production</b><span class="cap2">A TV show has seasons and episodes. A movie goes straight to the script.</span><div><button class="btn sm" data-a="show">TV show</button><button class="btn sm" data-a="movie">Movie</button></div>`;
+  start.querySelector('[data-a=show]').onclick = () => newShow(); start.querySelector('[data-a=movie]').onclick = () => newProject();
+  prod.appendChild(start);
+
   // pipeline
   const pipe = $('#hPipe'); pipe.innerHTML = '';
-  Object.entries(PHASES).forEach(([k, label]) => {
-    const list = items.filter(i => phaseOf(i.st) === k).sort((a, b) => b.updated - a.updated);
+  PIPE.forEach(([k, label]) => {
+    const list = items.filter(i => pipeOf(i.st) === k).sort((a, b) => b.updated - a.updated);
     const col = document.createElement('div'); col.className = 'pcol';
-    col.innerHTML = `<h4><span class="phase ${k}">${label}</span><em>${list.length}</em></h4><div class="pl"></div>`;
-    const pl0 = col.querySelector('.pl');
-    if (!list.length) pl0.innerHTML = '<span class="cap" style="padding:4px">Nothing here</span>';
-    list.forEach(it => { const ch = document.createElement('button'); ch.className = 'pchip'; const pr = k === 'writing' ? (it.st.script ? 'Script written' : 'No script yet') : k === 'storyboard' ? it.st.ap + '/' + it.st.n + ' frames approved' : k === 'shooting' ? it.st.clips + '/' + it.st.n + ' clips' : 'All ' + it.st.n + ' clips ready'; const pct = k === 'storyboard' ? it.st.ap / it.st.n : k === 'shooting' ? it.st.clips / it.st.n : k === 'edit' ? 1 : it.st.script ? .5 : 0; ch.innerHTML = `<b>${esc(it.title)}</b><span>${esc(it.sub)} · ${pr}</span><div class="bar"><i style="width:${Math.round(pct * 100)}%"></i></div>`; ch.onclick = () => open(it); pl0.appendChild(ch); });
+    col.innerHTML = `<div class="pch"><span>${label}</span><em>${list.length}</em></div>`;
+    if (!list.length) col.insertAdjacentHTML('beforeend', '<span class="pnone">Nothing here yet</span>');
+    list.forEach(it => {
+      const b = document.createElement('button'); b.className = 'pitem';
+      const sub = it.kind === 'episode' ? it.sub.replace(/^.* · S0?(\d+)E0?(\d+)$/, 'S$1 · Episode $2') : k === 'board' ? 'Movie · ' + it.st.ap + ' of ' + it.st.n + ' approved' : 'Movie';
+      b.innerHTML = `${coverFor(it.id, it.kind === 'episode' ? 'show' : 'movie').replace('class="cv"', 'class="cv mini"')}<span><b>${esc(it.kind === 'episode' && it.show ? (it.show.title || 'Untitled show') : it.title)}</b><span>${esc(sub)}</span></span>`;
+      b.onclick = () => openIt(it, k === 'premiere' ? 'studio' : k);
+      col.appendChild(b);
+    });
     pipe.appendChild(col);
   });
-  // productions
-  const prod = $('#hProd'); prod.innerHTML = '';
-  if (!shows.length && !movies) prod.innerHTML = '<div class="empty-dash">Your TV shows and movies will appear here.</div>';
-  shows.forEach(sh => {
-    const its = items.filter(i => i.show && i.show.id === sh.id), t = its.reduce((a, i) => ({ n: a.n + i.st.n, ap: a.ap + i.st.ap, clips: a.clips + i.st.clips }), { n: 0, ap: 0, clips: 0 });
-    const c = document.createElement('div'); c.className = 'prodc';
-    c.innerHTML = `<div class="pt">${EXI.tv.replace(/14/g, '18')}<b>${esc(sh.title || 'Untitled show')}</b><span class="phase">TV show</span></div>
-      <div class="ps">${pl((sh.seasons || []).length, 'season')} · ${pl(its.length, 'episode')} · ${pl(t.n, 'scene')} · ${pl((sh.assets || []).length, 'show asset')}</div>
-      <div class="pm"><div>Frames approved ${t.ap}/${t.n}<div class="bar"><i style="width:${t.n ? Math.round(t.ap / t.n * 100) : 0}%"></i></div></div><div>Clips ${t.clips}/${t.n}<div class="bar"><i style="width:${t.n ? Math.round(t.clips / t.n * 100) : 0}%"></i></div></div></div>
-      <div class="pa"><button class="btn sm pri" data-a="open">Open show</button><button class="btn sm" data-a="season">+ Season</button><button class="ib" data-a="del" title="Delete show" aria-label="Delete show">✕</button></div>`;
-    c.querySelector('[data-a=open]').onclick = () => openShow(sh.id);
-    c.querySelector('[data-a=season]').onclick = () => openShow(sh.id).then(newSeason);
-    c.querySelector('[data-a=del]').onclick = () => deleteShow(sh.id);
-    prod.appendChild(c);
-  });
-  items.filter(i => i.kind === 'movie').forEach(it => {
-    const t = it.st, c = document.createElement('div'); c.className = 'prodc';
-    c.innerHTML = `<div class="pt">${EXI.film.replace(/14/g, '18')}<b>${esc(it.title)}</b><span class="phase ${phaseOf(t)}">${PHASES[phaseOf(t)]}</span></div>
-      <div class="ps">Movie · ${pl(t.n, 'scene')} · ${pl(t.voices, 'voiceover')} · ${ago(it.updated)}</div>
-      <div class="pm"><div>Frames approved ${t.ap}/${t.n}<div class="bar"><i style="width:${t.n ? Math.round(t.ap / t.n * 100) : 0}%"></i></div></div><div>Clips ${t.clips}/${t.n}<div class="bar"><i style="width:${t.n ? Math.round(t.clips / t.n * 100) : 0}%"></i></div></div></div>
-      <div class="pa"><button class="btn sm pri" data-a="open">Open movie</button><button class="ib" data-a="del" title="Delete movie" aria-label="Delete movie">✕</button></div>`;
-    c.querySelector('[data-a=open]').onclick = () => openProject(it.id);
-    c.querySelector('[data-a=del]').onclick = () => deleteProject(it.id);
-    prod.appendChild(c);
-  });
-  renderFlowStrip(items, shows);
   storageUsage(); renderExplorer();
 }
+$$('#hFilter button').forEach(b => b.onclick = () => { S.homeFilter = b.dataset.f; renderHome(); });
 function deleteProject(id) {
   const p = store.get('ms_projects', []).find(x => x.id === id); if (!confirmBox('Delete “' + ((p && p.title) || 'this project') + '” and all its files from the app?')) return;
   store.remove('ms_proj_' + id); Vault.delPrefix('projects/' + id + '/').then(storageUsage);
@@ -1555,12 +1689,26 @@ function renderShow() {
   const sh = S.show; if (!sh) return;
   const set = (id, k) => { const el = $('#' + id); if (document.activeElement !== el) el.value = sh[k] || ''; el.oninput = () => { sh[k] = el.value; saveShow(); if (k === 'title') { updateCrumb(); renderExplorer(); } }; };
   set('shTitle', 'title'); set('shTheme', 'theme'); set('shStyle', 'style'); set('shScript', 'script');
-  const box = $('#shSeasons'); $('#shSnCount').textContent = sh.seasons.length || '';
-  box.innerHTML = sh.seasons.length ? '' : '<p class="muted" style="margin:0">No seasons yet.</p>';
-  sh.seasons.forEach((sid, k) => {
-    const sn = store.get('ms_season_' + sid, null) || { episodes: [] }, c = document.createElement('div'); c.className = 'epc';
-    c.innerHTML = `<span class="no">S${String(k + 1).padStart(2, '0')}</span><span class="t"><input class="epname" value="${esc(sn.title || '')}" placeholder="Season ${k + 1}" aria-label="Season ${k + 1} name"><span>${(sn.episodes || []).length} episodes</span></span>
-      <button class="ib" data-a="up" title="Move up" aria-label="Move up">↑</button><button class="ib" data-a="down" title="Move down" aria-label="Move down">↓</button><button class="ib" data-a="del" title="Delete season" aria-label="Delete season">✕</button><button class="btn sm" data-a="open">Open</button>`;
+  $('#shCover').innerHTML = coverFor(sh.id, 'show').replace('class="cv"', 'class="cv big"');
+  const ix = store.get('ms_projects', []), seasons = sh.seasons.map(sid => store.get('ms_season_' + sid, null) || { id: sid, episodes: [] });
+  const nEps = seasons.reduce((n, sn) => n + (sn.episodes || []).length, 0);
+  $('#shMeta').textContent = pl(seasons.length, 'season') + ' · ' + pl(nEps, 'episode') + ' · ' + pl((sh.assets || []).length, 'recurring asset');
+  $('#shSnCount').textContent = (sh.assets || []).length || '';
+  $('#shStartSeason').textContent = 'Start season ' + (seasons.length + 1);
+  const box = $('#shSeasons'); box.innerHTML = seasons.length ? '' : '<p class="muted" style="margin:0">No seasons yet. Start one to add episodes.</p>';
+  seasons.forEach((sn, k) => {
+    const sid = sh.seasons[k], c = document.createElement('div'); c.className = 'shcard snc';
+    c.innerHTML = `<div class="snh"><span class="overline">SEASON ${k + 1}</span><input class="epname" value="${esc(sn.title || '')}" placeholder="Season ${k + 1}" aria-label="Season ${k + 1} name"><span class="cap2">${pl((sn.episodes || []).length, 'episode')}</span>
+      <button class="ib" data-a="up" title="Move up" aria-label="Move season up">↑</button><button class="ib" data-a="down" title="Move down" aria-label="Move season down">↓</button><button class="ib" data-a="del" title="Delete season" aria-label="Delete season">✕</button><button class="btn sm" data-a="open">Season page</button></div><div class="eps"></div>`;
+    const eps = c.querySelector('.eps');
+    if (!(sn.episodes || []).length) eps.innerHTML = '<p class="cap2" style="margin:4px 0 0">No episodes yet.</p>';
+    (sn.episodes || []).forEach((pid, e) => {
+      const pr = ix.find(x => x.id === pid) || {}, d = store.get('ms_proj_' + pid, {}) || {}, st = prodStats(d), kk = pipeOf(st);
+      const r = document.createElement('button'); r.className = 'eprow';
+      r.innerHTML = `${coverFor(pid, 'show').replace('class="cv"', 'class="cv mini"')}<span class="ept"><span class="overline">EPISODE ${e + 1}</span><b>${esc(pr.title || d.title || 'Untitled episode')}</b><span class="cap2">${st.n ? pl(st.n, 'scene') + ' · ' + st.ap + ' of ' + st.n + ' frames approved' : st.script ? 'Script written' : 'No script yet'}</span></span>${statusLine(kk)}<span class="chev" aria-hidden="true">›</span>`;
+      r.onclick = () => openSeason(sid).then(() => openProject(pid));
+      eps.appendChild(r);
+    });
     const nm = c.querySelector('.epname'); nm.oninput = () => { const s2 = store.get('ms_season_' + sid, null); if (s2) { s2.title = nm.value; store.set('ms_season_' + sid, s2); } renderExplorer(); }; nm.onkeydown = e => { if (e.key === 'Enter') nm.blur(); };
     c.querySelector('[data-a=open]').onclick = () => openSeason(sid);
     c.querySelector('[data-a=up]').onclick = () => { if (k > 0) { sh.seasons.splice(k, 1); sh.seasons.splice(k - 1, 0, sid); saveShow(); renderShow(); } };
@@ -1571,6 +1719,12 @@ function renderShow() {
   renderOwnerAssets($('#shAssets'), sh, 'shows/' + sh.id, 'show', saveShow, renderShow);
   renderExplorer();
 }
+function showTab(t) { $$('.shtabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.t === t)); $$('#stShow [data-tab]').forEach(el => el.hidden = el.dataset.tab !== t); }
+$$('.shtabs button').forEach(b => b.onclick = () => showTab(b.dataset.t));
+$('#shBibleLink').onclick = () => { showTab('bible'); $('#shScript').focus(); };
+$('#shStartSeason').onclick = () => newSeason();
+$('#shNewEp').onclick = () => { const sh = S.show; if (!sh) return; if (!sh.seasons.length) { newSeason(); return; } openSeason(sh.seasons[sh.seasons.length - 1]).then(() => exNewEpisode()); };
+$('#shFromScript').onclick = () => { const sh = S.show; if (!sh) return; if (!sh.seasons.length) { newSeason(); return; } openSeason(sh.seasons[sh.seasons.length - 1]).then(() => { const b = $('#snSplit'); if (b) b.click(); }); };
 $('#shNewSeason').onclick = () => newSeason();
 $$('[data-shnew]').forEach(b => b.onclick = () => { const sh = S.show; sh.assets = sh.assets || []; sh.assets.push({ id: uid(), scope: 'show', type: b.dataset.shnew, name: 'New ' + ATYPE[b.dataset.shnew].toLowerCase(), desc: '', locks: '', keys: '', prompt: '', img: null }); saveShow(); renderShow(); });
 $('#hNewShow').onclick = () => newShow();
@@ -1714,101 +1868,67 @@ const EXI = {
   cloud: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF8F52" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.7-1.5A4 4 0 0 1 17.5 18z"/></svg>',
   json: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9C9CA6" stroke-width="1.8" stroke-linecap="round"><path d="M8 4c-2 0-2 2-2 4s-2 4-2 4 2 0 2 4 0 4 2 4M16 4c2 0 2 2 2 4s2 4 2 4-2 0-2 4 0 4-2 4"/></svg>'
 };
+// ---- sidebar: productions, the open production's stages ----
+const COVERS = [
+  '<i class="cv" style="background:#F26B1D"><b style="right:12%;top:14%;width:24%;background:#FFC72C"></b><b style="left:-12%;bottom:-46%;width:64%;background:#C2410C"></b><b style="right:-10%;bottom:-60%;width:70%;background:#7C2D12"></b></i>',
+  '<i class="cv" style="background:#071422"><b style="left:22%;top:18%;width:20%;background:rgba(127,227,216,.75)"></b><b style="left:58%;top:36%;width:15%;background:rgba(158,140,255,.7)"></b><b style="left:40%;top:64%;width:11%;background:rgba(127,227,216,.5)"></b></i>',
+  '<i class="cv" style="background:#2B1A10"><b style="left:30%;top:22%;width:40%;background:#F26B1D"></b></i>',
+  '<i class="cv" style="background:#FFC72C"><b style="left:30%;top:22%;width:40%;background:#F26B1D"></b></i>',
+  '<i class="cv" style="background:#C2410C"><b style="left:30%;top:22%;width:40%;background:#FFC72C"></b></i>'
+];
+function coverFor(id, type) { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return type === 'show' ? COVERS[[0, 0, 3, 4][h % 4]] : COVERS[1]; }
+const curStageOpen = () => 'stage:' + (['home', 'show', 'season'].includes(S.stage) ? (S.lastStage || 'script') : S.stage);
+const STAGE_LINKS = [['script', 'Script'], ['scenes', 'Scenes'], ['assets', 'Assets'], ['board', 'Storyboard'], ['studio', 'Studio']];
 function renderExplorer() {
   const t = $('#exTree'); if (!t) return;
   const hadFocus = t.contains(document.activeElement) && !document.activeElement.classList.contains('ren');
   if (t.querySelector('input.ren')) return; // don't disturb an active rename
-  const rows = [], st = S.stage, sn = S.season;
-  const row = (depth, icon, name, o = {}) => rows.push(`<button class="exr${o.on ? ' on' : ''}${o.root ? ' root' : ''}" style="padding-left:${8 + depth * 12}px" data-key="${o.kind || 'x'}:${o.id || ''}" data-kind="${o.kind || ''}" data-id="${o.id || ''}" ${o.open ? `data-open="${o.open}"` : ''} ${o.tog ? `data-tog="${o.tog}"` : ''} ${['scene', 'episode', 'seasonrow'].includes(o.kind) ? 'draggable="true"' : ''} role="treeitem" ${o.tog ? `aria-expanded="${!!S.exOpen[o.tog]}"` : ''} title="${esc(o.title || name)}"><span class="chev">${o.tog ? (S.exOpen[o.tog] ? '▾' : '▸') : ''}</span>${icon}<span class="nm">${esc(name)}</span>${o.meta ? `<span class="mt">${o.meta}</span>` : ''}</button>`);
-  const episodeFiles = d => {
-    row(d, EXI.md, 'script.md', { open: 'stage:script', on: st === 'script', kind: 'file', id: 'script' });
-    row(d, EXI.canvas, 'flow.canvas', { open: 'stage:scenes', on: st === 'scenes', kind: 'file', id: 'scenes' });
-    row(d, EXI.folder(S.exOpen.scenes), 'scenes', { tog: 'scenes', meta: S.scenes.length || '', kind: 'fscenes' });
-    if (S.exOpen.scenes) S.scenes.forEach((s, i) => { const stt = statusOf(s); row(d + 1, EXI.scene, String(i + 1).padStart(2, '0') + '-' + slug(s.label || s.vo || s.prompt) + '.scene', { open: 'scene:' + s.id, on: st === 'studio' && S.sel === s.id, meta: `<span class="dot ${stt.k}" style="display:inline-block"></span>`, title: (s.label ? s.label + ' — ' : '') + (s.vo || s.prompt || 'Empty scene'), kind: 'scene', id: s.id }); });
-    const own = S.assets.filter(a => a.scope !== 'season');
-    row(d, EXI.folder(S.exOpen.assets), 'assets', { tog: 'assets', meta: own.length || '', kind: 'fassets' });
-    if (S.exOpen.assets) [['character', 'cast'], ['location', 'locations'], ['prop', 'props'], ['look', 'looks']].forEach(([k, fname]) => {
-      const list = own.filter(a => a.type === k); if (!list.length) return;
-      row(d + 1, EXI.folder(S.exOpen[k]), fname, { tog: k, meta: list.length, kind: 'ftype', id: k });
-      if (S.exOpen[k]) list.forEach(a => row(d + 2, EXI.asset, slug(a.name) + '.asset', { open: 'asset:' + a.id, on: st === 'assets' && S.aSel === a.id, title: a.desc || a.name, kind: 'asset', id: a.id }));
-    });
-    row(d, EXI.board, 'storyboard.board', { open: 'stage:board', on: st === 'board', meta: S.scenes.length ? S.scenes.filter(s => s.approved).length + '/' + S.scenes.length : '', kind: 'file', id: 'board' });
-    row(d, EXI.studio, 'timeline.studio', { open: 'stage:studio', on: st === 'studio' && !S.scenes.some(s => s.id === S.sel), kind: 'file', id: 'studio' });
-    const files = S.files || [];
-    row(d, EXI.folder(S.exOpen.media), 'media', { tog: 'media', meta: files.length || '', kind: 'fmedia' });
-    if (S.exOpen.media) [['clips', 'clips'], ['voices', 'voices'], ['images', 'images'], ['storyboard', 'storyboard'], ['refs', 'refs'], ['music', 'music'], ['renders', 'renders']].forEach(([k, label]) => {
-      const list = files.filter(f => f.kind === k); if (!list.length) return;
-      const tk = 'm_' + k; if (S.exOpen[tk] === undefined) S.exOpen[tk] = true;
-      row(d + 1, EXI.folder(S.exOpen[tk]), label, { tog: tk, meta: list.length, kind: 'fmediak' });
-      if (S.exOpen[tk]) list.forEach(f => row(d + 2, EXI.media, f.name, { open: fileTarget(f), meta: fmtSize(f.size), title: f.path, kind: 'media', id: f.path }));
-    });
-    row(d, EXI.json, sn ? 'episode.json' : 'project.json', { title: 'Saved automatically', kind: 'file', id: 'json' });
+  const q = ($('#sbSearch') ? $('#sbSearch').value : '').trim().toLowerCase(), match = n => !q || String(n || '').toLowerCase().includes(q);
+  const rows = [], st = S.stage;
+  const row = (cls, inner, o = {}) => rows.push(`<button class="exr ${cls}${o.on ? ' on' : ''}" data-key="${o.kind || 'x'}:${o.id || ''}" data-kind="${o.kind || ''}" data-id="${o.id || ''}" ${o.open ? `data-open="${o.open}"` : ''} ${o.tog ? `data-tog="${o.tog}"` : ''} title="${esc(o.title || '')}" role="treeitem" tabindex="-1">${inner}</button>`);
+  const nm = n => `<span class="nm">${esc(n)}</span>`, mt = m => m === '' || m == null ? '' : `<span class="mt">${m}</span>`;
+  const stages = () => {
+    const done = { script: !!$('#script').value.trim(), scenes: S.scenes.length > 0, assets: S.assets.length > 0, board: S.scenes.length > 0 && S.scenes.every(x => x.approved), studio: S.scenes.length > 0 && S.scenes.every(x => x.kind === 'video') };
+    STAGE_LINKS.forEach(([k, label]) => row('stg', `<span class="sdot${st === k ? ' cur' : done[k] ? ' done' : ''}" aria-hidden="true"></span>${nm(label)}`, { open: 'stage:' + k, on: st === k, kind: 'file', id: k, title: label }));
   };
-  const seasonBlock = (d, sIdx) => {
-    row(d, EXI.folder(true), 'S' + String(sIdx).padStart(2, '0') + ' ' + seasonLabel(sn.title, sIdx), { root: d === 0, open: 'season:', on: st === 'season', title: 'Season – click for the season page, right-click for actions', kind: 'season', id: sn.id, meta: 'open' });
-    row(d + 1, EXI.md, 'theme.md', { open: 'season:snTheme', kind: 'sfile', id: 'snTheme' });
-    row(d + 1, EXI.md, 'season-style.md', { open: 'season:snStyle', kind: 'sfile', id: 'snStyle' });
-    row(d + 1, EXI.md, 'season-script.md', { open: 'season:snScript', kind: 'sfile', id: 'snScript' });
-    const sa = (sn.assets || []);
-    if (S.exOpen.sassets === undefined) S.exOpen.sassets = true;
-    row(d + 1, EXI.folder(S.exOpen.sassets), 'season-assets', { tog: 'sassets', meta: sa.length || '', kind: 'fsassets' });
-    if (S.exOpen.sassets) sa.forEach(a => row(d + 2, EXI.asset, slug(a.name) + '.asset', { open: S.pid ? 'asset:' + a.id : 'season:snAssets', on: st === 'assets' && S.aSel === a.id, title: a.desc || a.name, kind: 'sasset', id: a.id }));
-    if (S.exOpen.episodes === undefined) S.exOpen.episodes = true;
-    row(d + 1, EXI.folder(S.exOpen.episodes), 'episodes', { tog: 'episodes', meta: sn.episodes.length || '', kind: 'feps' });
-    if (S.exOpen.episodes) {
-      const ix = store.get('ms_projects', []);
-      sn.episodes.forEach((pid, k) => {
-        const p = ix.find(x => x.id === pid) || {}, cur = pid === S.pid, name = 'EP' + String(k + 1).padStart(2, '0') + ' ' + epLabel(cur ? $('#title').value : p.title, k + 1);
-        if (cur) { const tk = 'ep_' + pid; if (S.exOpen[tk] === undefined) S.exOpen[tk] = true; row(d + 2, EXI.folder(S.exOpen[tk]), name, { tog: tk, meta: 'open', kind: 'episode', id: pid }); if (S.exOpen[tk]) episodeFiles(d + 3); }
-        else row(d + 2, EXI.folder(false), name, { open: 'episode:' + pid, title: 'Click to open · double-click or F2 to rename', meta: (p.scenes || 0) + ' sc', kind: 'episode', id: pid });
-      });
-    }
-  };
-  const showBlock = (d, sh) => {
-    row(d, EXI.tv, sh.title || 'Untitled show', { open: 'show:', on: st === 'show', title: 'TV show – click for the show page, right-click for actions', kind: 'show', id: sh.id, meta: 'open' });
-    row(d + 1, EXI.md, 'show-theme.md', { open: 'show:shTheme', kind: 'shfile', id: 'shTheme' });
-    row(d + 1, EXI.md, 'show-style.md', { open: 'show:shStyle', kind: 'shfile', id: 'shStyle' });
-    row(d + 1, EXI.md, 'show-bible.md', { open: 'show:shScript', kind: 'shfile', id: 'shScript' });
-    const ha = sh.assets || []; if (S.exOpen.shassets === undefined) S.exOpen.shassets = true;
-    row(d + 1, EXI.folder(S.exOpen.shassets), 'show-assets', { tog: 'shassets', meta: ha.length || '', kind: 'fshassets' });
-    if (S.exOpen.shassets) ha.forEach(a => row(d + 2, EXI.asset, slug(a.name) + '.asset', { open: S.pid ? 'asset:' + a.id : 'show:shAssets', on: st === 'assets' && S.aSel === a.id, title: a.desc || a.name, kind: 'shasset', id: a.id }));
-    if (S.exOpen.seasons === undefined) S.exOpen.seasons = true;
-    row(d + 1, EXI.folder(S.exOpen.seasons), 'seasons', { tog: 'seasons', meta: sh.seasons.length || '', kind: 'fseasons' });
-    if (S.exOpen.seasons) sh.seasons.forEach((sid, k) => {
-      if (sn && sid === sn.id) seasonBlock(d + 2, k + 1);
-      else libSeason(d + 2, sid, k, true);
-    });
-  };
-  const libSeason = (d, sid, k, curShow) => {
-    const s2 = store.get('ms_season_' + sid, null) || {}, tk = 'ls_' + sid;
-    row(d, EXI.folder(!!S.exOpen[tk]), 'S' + String(k + 1).padStart(2, '0') + ' ' + seasonLabel(s2.title, k + 1), { tog: tk, open: 'seasonid:' + sid, title: 'Click to open · ▸ to peek inside · F2 to rename', meta: pl((s2.episodes || []).length, 'ep'), kind: curShow ? 'seasonrow' : 'libseason', id: sid });
-    if (S.exOpen[tk]) { const ix = store.get('ms_projects', []); (s2.episodes || []).forEach((pid, e) => { const p = ix.find(x => x.id === pid) || {}; row(d + 1, EXI.scene, 'EP' + String(e + 1).padStart(2, '0') + ' ' + epLabel(p.title, e + 1), { open: 'episode:' + pid, title: 'Open episode', meta: (p.scenes || 0) + ' sc', kind: 'libep', id: pid }); }); }
-  };
-  // ---- library roots ----
-  if (S.exOpen.lib_shows === undefined) S.exOpen.lib_shows = true;
-  if (S.exOpen.lib_movies === undefined) S.exOpen.lib_movies = true;
   const shows = store.get('ms_shows', []), ix = store.get('ms_projects', []), movies = ix.filter(p => !p.seasonId);
-  row(0, '', 'TV shows', { root: true, tog: 'lib_shows', meta: shows.length || '', kind: 'fshows', title: 'All TV shows – right-click to add one' });
-  if (S.exOpen.lib_shows) {
-    if (!shows.length) row(1, '', 'No shows yet', { kind: 'empty', title: 'Right-click TV shows to add one' });
-    shows.forEach(s0 => {
-      if (S.show && S.show.id === s0.id) { showBlock(1, S.show); return; }
-      const sh = store.get('ms_show_' + s0.id, null) || { seasons: [] }, tk = 'lsh_' + s0.id;
-      row(1, EXI.tv, sh.title || 'Untitled show', { tog: tk, open: 'showid:' + s0.id, title: 'Click to open · ▸ to peek inside · F2 to rename', meta: pl((sh.seasons || []).length, 'season'), kind: 'showrow', id: s0.id });
-      if (S.exOpen[tk]) (sh.seasons || []).forEach((sid, k) => libSeason(2, sid, k, false));
+  let any = false;
+  shows.forEach(s0 => {
+    const sh = (S.show && S.show.id === s0.id) ? S.show : (store.get('ms_show_' + s0.id, null) || { seasons: [] });
+    const eps = (sh.seasons || []).reduce((n, sid) => n + ((store.get('ms_season_' + sid, null) || {}).episodes || []).length, 0);
+    if (!match(sh.title)) return; any = true;
+    const open = S.show && S.show.id === s0.id;
+    row('prod', coverFor(s0.id, 'show') + nm(sh.title || 'Untitled show') + mt(eps ? eps + ' ep' : ''), { open: 'showid:' + s0.id, on: open && st === 'show', kind: open ? 'show' : 'showrow', id: s0.id, title: 'TV show · right-click for actions' });
+    if (!open) return;
+    (sh.seasons || []).forEach((sid, k) => {
+      const sn = S.season && S.season.id === sid ? S.season : store.get('ms_season_' + sid, null); if (!sn) return;
+      const cur = S.season && S.season.id === sid;
+      row('sub', nm('Season ' + (k + 1) + (sn.title && !/^season\s*\d+$/i.test(sn.title) ? ' · ' + sn.title : '')) + mt((sn.episodes || []).length || ''), { open: 'seasonid:' + sid, on: cur && st === 'season', kind: cur ? 'season' : 'libseason', id: sid });
+      if (!cur) return;
+      (sn.episodes || []).forEach((pid, e) => {
+        const p = ix.find(x => x.id === pid) || {}, title = pid === S.pid ? ($('#title').value || p.title) : p.title;
+        row('sub2', nm('E' + (e + 1) + ' · ' + (title || 'Untitled episode')), { open: pid === S.pid ? curStageOpen() : 'episode:' + pid, on: pid === S.pid && false, kind: 'episode', id: pid });
+        if (pid === S.pid) stages();
+      });
     });
-  }
-  row(0, '', 'Movies', { root: true, tog: 'lib_movies', meta: movies.length || '', kind: 'fmovies', title: 'All movies – right-click to add one' });
-  if (S.exOpen.lib_movies) {
-    if (!movies.length) row(1, '', 'No movies yet', { kind: 'empty' });
-    movies.forEach(p => {
-      if (p.id === S.pid && !S.season) { const tk = 'mv_' + p.id; if (S.exOpen[tk] === undefined) S.exOpen[tk] = true; row(1, EXI.film, $('#title').value || 'Untitled movie', { tog: tk, title: 'Movie – right-click for actions', kind: 'project', id: S.pid, meta: 'open' }); if (S.exOpen[tk]) episodeFiles(2); }
-      else row(1, EXI.film, p.title || 'Untitled movie', { open: 'episode:' + p.id, title: 'Click to open · F2 to rename', meta: pl(p.scenes || 0, 'scene'), kind: 'movierow', id: p.id });
-    });
-  }
+  });
+  movies.forEach(p => {
+    const open = p.id === S.pid && !S.season, title = open ? ($('#title').value || p.title) : p.title;
+    if (!match(title)) return; any = true;
+    row('prod', coverFor(p.id, 'movie') + nm(title || 'Untitled movie') + mt(p.scenes || ''), { open: open ? curStageOpen() : 'episode:' + p.id, kind: open ? 'project' : 'movierow', id: p.id, title: 'Movie · right-click for actions' });
+    if (open) stages();
+  });
+  if (!any) rows.push(`<p class="sbempty">${q ? 'No productions match “' + esc(q) + '”.' : 'No productions yet. Use + to start a TV show or a movie.'}</p>`);
   t.innerHTML = rows.join('');
+  $$('#explorer .sbnav button').forEach(b => b.toggleAttribute('aria-current', (b.id === 'navHome' && st === 'home') || (b.id === 'navAssets' && st === 'assets')));
   if (hadFocus && S.exFocus) { const el = t.querySelector(`[data-key="${CSS.escape(S.exFocus)}"]`); if (el) el.focus(); }
 }
+$('#sbSearch').addEventListener('input', () => renderExplorer());
+$('#navHome').onclick = () => goStage('home');
+$('#navAssets').onclick = () => { if (S.pid) goStage('assets'); else if (S.show) { goStage('show'); } else toast('Open a production to see its assets'); };
+$('#navSettings').onclick = () => openSettings();
+$('#sbNew').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); showCtx(r.left, r.bottom + 4, { dataset: { kind: 'fnew', id: '' } }); };
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (S.stage === 'studio') goStage('home'); setTimeout(() => $('#sbSearch').focus(), 30); } });
 // ---- explorer behaviour (delegated) ----
 const EXT_RENAMABLE = ['showrow', 'movierow', 'libseason', 'show', 'season', 'seasonrow', 'project', 'episode', 'scene', 'asset', 'sasset', 'shasset'];
 let renTimer = 0;
@@ -1988,7 +2108,8 @@ function showCtx(x, y, b) {
   const assetTypes = sc => Object.entries(ATYPE).forEach(([k, l]) => add('New ' + l.toLowerCase() + (sc === true || sc === 'season' ? ' (season)' : sc === 'show' ? ' (show)' : ''), () => exNewAsset(k, sc)));
   const rnm = () => add('Rename', () => startRename(b), { k: 'F2' });
   const del = (lbl) => add(lbl || 'Delete', () => exDelete(kind, id), { k: 'Del', danger: true });
-  if (kind === 'scene') { add('Open in Studio', () => exOpenRow(b), { k: '↵' }); add('Edit in Scenes', () => { S.sel = id; goStage('scenes'); markFlowSel(); }); add('Show in Storyboard', () => goStage('board')); sep(); add('New scene after', () => exNewScene(id)); add('Duplicate', () => exDuplicate(kind, id), { k: 'Ctrl+D' }); sep(); rnm(); add('Move up', () => exMove(kind, id, -1), { disabled: S.scenes[0] && S.scenes[0].id === id }); add('Move down', () => exMove(kind, id, 1), { disabled: S.scenes.length && S.scenes[S.scenes.length - 1].id === id }); sep(); del('Delete scene'); }
+  if (b && b.items) b.items.forEach(([l, fn, o]) => add(l, fn, o || {}));
+  else if (kind === 'scene') { add('Open in Studio', () => exOpenRow(b), { k: '↵' }); add('Edit in Scenes', () => { S.sel = id; goStage('scenes'); markFlowSel(); }); add('Show in Storyboard', () => goStage('board')); sep(); add('New scene after', () => exNewScene(id)); add('Duplicate', () => exDuplicate(kind, id), { k: 'Ctrl+D' }); sep(); rnm(); add('Move up', () => exMove(kind, id, -1), { disabled: S.scenes[0] && S.scenes[0].id === id }); add('Move down', () => exMove(kind, id, 1), { disabled: S.scenes.length && S.scenes[S.scenes.length - 1].id === id }); sep(); del('Delete scene'); }
   else if (['asset', 'sasset', 'shasset'].includes(kind)) { const a = findAsset(id); add('Open', () => exOpenRow(b), { k: '↵' }); add('Duplicate', () => exDuplicate(kind, id), { k: 'Ctrl+D' }); if (S.season && S.pid && a) { if (a.scope) add('Make episode-only', () => setScope(a, undefined)); if (a.scope !== 'season') add('Share with the whole season', () => setScope(a, 'season')); if (S.show && a.scope !== 'show') add('Share with the whole show', () => setScope(a, 'show')); } sep(); rnm(); del('Delete asset'); }
   else if (kind === 'episode') { add(id === S.pid ? 'Collapse / expand' : 'Open episode', () => exOpenRow(b), { k: '↵' }); add('Open season page', () => openSeason(S.season.id)); sep(); add('New episode', exNewEpisode); add('Duplicate episode', () => exDuplicate(kind, id), { k: 'Ctrl+D' }); sep(); rnm(); add('Move up', () => exMove(kind, id, -1), { disabled: S.season.episodes[0] === id }); add('Move down', () => exMove(kind, id, 1), { disabled: S.season.episodes[S.season.episodes.length - 1] === id }); sep(); del('Delete episode'); }
   else if (kind === 'season') { add('Open season page', () => openSeason(id), { k: '↵' }); sep(); add('New episode', exNewEpisode); assetTypes('season'); sep(); rnm(); if (S.show) { add('Move up', () => exMove(kind, id, -1)); add('Move down', () => exMove(kind, id, 1)); } add('Collapse folders', exCollapseAll); sep(); del('Delete season'); }
@@ -2020,12 +2141,11 @@ function showCtx(x, y, b) {
   const f = c.querySelector('button:not(:disabled)'); if (f) f.focus({ preventScroll: true });
 }
 const toggleExplorer = () => { document.body.classList.toggle('noexp'); store.set('ms_noexp', document.body.classList.contains('noexp')); if (S.stage === 'studio') fitStage(); if (S.stage === 'scenes') renderFlow(); };
-$('#exHide').onclick = toggleExplorer; $('#btnExplorer').onclick = toggleExplorer;
-$('#exNewScene').onclick = () => exNewScene(S.scenes.some(s => s.id === S.sel) ? S.sel : null);
-$('#exNewEp').onclick = () => { if (S.season) exNewEpisode(); else if (S.show) newSeason(); else toast('Episodes live inside a TV show season'); };
-$('#exNewAsset').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); showCtx(r.left, r.bottom + 4, { dataset: { kind: S.pid ? 'fassets' : S.season ? 'fsassets' : 'fshassets', id: '' } }); };
-$('#exRefresh').onclick = () => { refreshFiles(); renderExplorer(); toast('Explorer refreshed'); };
-$('#exCollapse').onclick = exCollapseAll;
+// (old explorer toolbar button #exNewScene removed in the redesign)
+// (old explorer toolbar button #exNewEp removed in the redesign)
+// (old explorer toolbar button #exNewAsset removed in the redesign)
+// (old explorer toolbar button #exRefresh removed in the redesign)
+// (old explorer toolbar button #exCollapse removed in the redesign)
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (!S.pid) return; saveDraft(); Backend.flush().then(() => toast('Saved to your account'), e => toast('Not saved: ' + e.message, 5000)); }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b' && S.stage !== 'home') { e.preventDefault(); toggleExplorer(); }
@@ -2034,7 +2154,8 @@ document.addEventListener('keydown', e => {
 // ---------------- Theme ----------------
 const MOON = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
 const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
-function themePref() { return store.get('ms_theme', 'system'); }
+function themePref() { try { const v = localStorage.getItem('mitome-theme'); return v === 'dark' || v === 'light' ? v : 'system'; } catch (e) { return 'system'; } }
+function setThemePref(v) { try { if (v === 'system') localStorage.removeItem('mitome-theme'); else localStorage.setItem('mitome-theme', v); } catch (e) {} }
 function applyTheme() {
   const pref = themePref(), t = pref === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : pref;
   document.documentElement.dataset.theme = t;
@@ -2042,8 +2163,8 @@ function applyTheme() {
   $('#btnTheme').setAttribute('aria-label', t === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
   if (typeof renderTimeline === 'function' && S.stage === 'studio') renderTimeline();
 }
-$('#btnTheme').onclick = () => { const cur = document.documentElement.dataset.theme; store.set('ms_theme', cur === 'light' ? 'dark' : 'light'); applyTheme(); const s = $('#sTheme'); if (s) s.value = themePref(); };
-$('#sTheme').onchange = e => { store.set('ms_theme', e.target.value); applyTheme(); };
+$('#btnTheme').onclick = () => { const cur = document.documentElement.dataset.theme; setThemePref(cur === 'light' ? 'dark' : 'light'); applyTheme(); const s = $('#sTheme'); if (s) s.value = themePref(); };
+$('#sTheme').onchange = e => { setThemePref(e.target.value); applyTheme(); };
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (themePref() === 'system') applyTheme(); });
 applyTheme();
 

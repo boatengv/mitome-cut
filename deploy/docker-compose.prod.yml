@@ -20,7 +20,10 @@ services:
     depends_on: [api]
 
   api:
-    build: ..
+    build:
+      context: ..
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
     restart: unless-stopped
     env_file: ../.env.production
     environment:
@@ -36,7 +39,10 @@ services:
       retries: 3
 
   worker:
-    build: ..
+    build:
+      context: ..
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
     restart: unless-stopped
     command: ["node", "--enable-source-maps", "apps/server/dist/worker.js"]
     env_file: ../.env.production
