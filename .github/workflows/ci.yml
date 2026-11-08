@@ -37,7 +37,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Smoke test skipped (no Clerk secrets)
+        if: ${{ env.CLERK_SECRET_KEY == '' }}
+        run: echo "::warning::Skipping the end-to-end smoke test: add CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY (development instance) as repository secrets."
       - name: End-to-end smoke test
+        if: ${{ env.CLERK_SECRET_KEY != '' }}
         run: |
           WEB_DIST_DIR=apps/web/dist node apps/server/dist/api.js &
           node apps/server/dist/worker.js &
