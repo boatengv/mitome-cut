@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -255,27 +255,15 @@ export const localStorage: LocalStorage | null = storage instanceof LocalStorage
 /* ---------------- Key layout ---------------- */
 
 export const keys = {
-  original: (ownerId: string, projectId: string, assetId: string, ext: string) =>
-    `users/${ownerId}/projects/${projectId}/assets/${assetId}/original${ext}`,
-  thumb: (ownerId: string, projectId: string, assetId: string) =>
-    `users/${ownerId}/projects/${projectId}/assets/${assetId}/thumb.jpg`,
+  /**
+   * users/<owner>/<logical path minus extension>.<random>.<ext>
+   * The random part means a replacement never overwrites an object another
+   * device may still be streaming; the old object is deleted once replaced.
+   */
+  file: (ownerId: string, logicalPath: string) => {
+    const ext = path.extname(logicalPath);
+    const base = logicalPath.slice(0, logicalPath.length - ext.length);
+    return `users/${ownerId}/${base}.${randomBytes(6).toString('hex')}${ext}`;
+  },
   backup: (stamp: string) => `backups/postgres/${stamp}.sql.gz`,
 };
-
-export function extFor(name: string, mime: string): string {
-  const fromName = path.extname(name).toLowerCase();
-  if (/^\.[a-z0-9]{1,5}$/.test(fromName)) return fromName;
-  const map: Record<string, string> = {
-    'video/mp4': '.mp4',
-    'video/quicktime': '.mov',
-    'video/webm': '.webm',
-    'audio/mpeg': '.mp3',
-    'audio/wav': '.wav',
-    'audio/x-wav': '.wav',
-    'audio/mp4': '.m4a',
-    'image/png': '.png',
-    'image/jpeg': '.jpg',
-    'image/gif': '.gif',
-  };
-  return map[mime] ?? '.bin';
-}

@@ -1,155 +1,164 @@
 import { z } from 'zod';
-import { timelineSchema, type Timeline } from './timeline.js';
 
-/* ---------- Enumerations shared by the database, API and UI ---------- */
+/* ---------------------------------------------------------------------------
+ * Library documents
+ *
+ * The editor keeps its library as a small set of JSON documents, one per key,
+ * mirroring how the original prototype used browser storage:
+ *   ms_shows, ms_seasons, ms_projects      indexes
+ *   ms_show_<id>, ms_season_<id>           a show / a season (+ its assets)
+ *   ms_proj_<id>                           an episode or movie (scenes, assets…)
+ * Each user's documents are private to them and stored in Postgres.
+ * ------------------------------------------------------------------------- */
 
-export const ASSET_KINDS = ['video', 'audio', 'image'] as const;
-export type AssetKind = (typeof ASSET_KINDS)[number];
+export const DOC_KEY_RE = /^(ms_projects|ms_shows|ms_seasons|ms_(proj|show|season)_[a-z0-9]{1,40})$/;
 
-export const ASSET_SOURCES = ['upload', 'generation', 'render'] as const;
-export type AssetSource = (typeof ASSET_SOURCES)[number];
+export const putDocBody = z.object({ value: z.unknown() });
 
-/** pending_upload → processing → ready | failed */
-export const ASSET_STATUSES = ['pending_upload', 'processing', 'ready', 'failed'] as const;
-export type AssetStatus = (typeof ASSET_STATUSES)[number];
+/* ---------------------------------------------------------------------------
+ * Media files
+ *
+ * Logical paths, as the editor names them:
+ *   projects/<pid>/media/clips/<sceneId>.mp4
+ *   seasons/<id>/media/images/<assetId>.png
+ * The server maps each to a storage key that is never reused, so replacing a
+ * file never overwrites bytes another device may still be reading.
+ * ------------------------------------------------------------------------- */
 
-export const JOB_STATUSES = ['queued', 'running', 'succeeded', 'failed', 'canceled'] as const;
-export type JobStatus = (typeof JOB_STATUSES)[number];
+export const FILE_KINDS = ['clips', 'voices', 'images', 'storyboard', 'refs', 'music', 'renders'] as const;
+export type FileKind = (typeof FILE_KINDS)[number];
 
-export const EXPORT_FORMATS = ['mp4', 'mov', 'gif'] as const;
-export const EXPORT_RESOLUTIONS = ['720p', '1080p', '4k'] as const;
-export const EXPORT_FPS = [24, 30, 60] as const;
+export const FILE_PATH_RE = new RegExp(
+  `^(projects|shows|seasons)/[a-z0-9]{1,40}/media/(${FILE_KINDS.join('|')})/[A-Za-z0-9_-]{1,64}\\.[a-z0-9]{2,5}$`,
+);
+export const FILE_PREFIX_RE = /^(projects|shows|seasons)\/[a-z0-9]{1,40}\/[A-Za-z0-9_.\/-]*$/;
 
-export const RESOLUTION_SIZE: Record<(typeof EXPORT_RESOLUTIONS)[number], { width: number; height: number }> = {
-  '720p': { width: 1280, height: 720 },
-  '1080p': { width: 1920, height: 1080 },
-  '4k': { width: 3840, height: 2160 },
-};
+export const uploadBody = z.object({
+  path: z.string().regex(FILE_PATH_RE, 'Invalid file path'),
+  mime: z.string().trim().min(3).max(120),
+  size: z.number().int().positive(),
+});
 
-/* ---------- Request bodies ---------- */
+export const completeBody = z.object({ id: z.string().uuid() });
+export const urlsBody = z.object({ paths: z.array(z.string().regex(FILE_PATH_RE)).max(500) });
+
+export interface FileDTO {
+  path: string;
+  type: string;
+  size: number;
+  updated: number;
+}
+
+/* ---------------------------------------------------------------------------
+ * AI
+ * ------------------------------------------------------------------------- */
+
+export const AI_PURPOSES = ['video', 'image', 'sketch', 'llm'] as const;
+export type AiPurpose = (typeof AI_PURPOSES)[number];
+
+export const falJobBody = z.object({
+  model: z.string().regex(/^fal-ai\/[A-Za-z0-9._\/-]{2,120}$/, 'Only fal-ai/* models are allowed'),
+  input: z.record(z.string(), z.unknown()),
+  purpose: z.enum(AI_PURPOSES),
+  projectId: z.string().regex(/^[a-z0-9]{1,40}$/).optional(),
+});
+
+export const ttsBody = z.object({
+  voice: z.string().trim().regex(/^[A-Za-z0-9]{8,40}$/, 'Invalid voice ID'),
+  model: z.string().trim().regex(/^[a-z0-9_]{3,60}$/, 'Invalid model'),
+  text: z.string().trim().min(1).max(2500),
+});
+
+export const llmBody = z.object({
+  provider: z.enum(['anthropic', 'fal']),
+  model: z.string().trim().min(1).max(120),
+  system: z.string().max(20_000),
+  user: z.string().min(1).max(60_000),
+});
+
+export type AiJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
+
+export interface AiJobDTO {
+  id: string;
+  status: AiJobStatus;
+  message: string | null;
+  output: unknown;
+  error: string | null;
+}
+
+export interface AiConfigDTO {
+  fal: boolean;
+  elevenlabs: boolean;
+  anthropic: boolean;
+  limits: { videoPerDay: number; imagePerDay: number; ttsCharsPerDay: number; llmPerDay: number };
+}
+
+/* ---------------------------------------------------------------------------
+ * Accounts
+ * ------------------------------------------------------------------------- */
 
 export const credentialsBody = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   password: z.string().min(10, 'Use at least 10 characters').max(200),
 });
 
-export const createProjectBody = z.object({
-  title: z.string().trim().min(1).max(120).default('Untitled project'),
-});
-
-export const updateProjectBody = z.object({
-  title: z.string().trim().min(1).max(120),
-});
-
-export const saveTimelineBody = z.object({
-  /** The revision the client last saw. A mismatch returns 409. */
-  revision: z.number().int().min(0),
-  timeline: timelineSchema,
-});
-
-export const createUploadBody = z.object({
-  name: z.string().trim().min(1).max(200),
-  mime: z.string().trim().min(3).max(120),
-  size: z.number().int().positive(),
-});
-
-export const createGenerationBody = z.object({
-  prompt: z.string().trim().min(1).max(4000),
-  model: z.string().trim().min(1).max(80).default('demo'),
-  durationSec: z.number().min(1).max(20).default(5),
-  resolution: z.enum(['720p', '1080p']).default('720p'),
-});
-
-export const createExportBody = z.object({
-  format: z.enum(EXPORT_FORMATS).default('mp4'),
-  resolution: z.enum(EXPORT_RESOLUTIONS).default('1080p'),
-  fps: z.union([z.literal(24), z.literal(30), z.literal(60)]).default(24),
-});
-
-export type CreateExportBody = z.infer<typeof createExportBody>;
-
-/* ---------- Response shapes ---------- */
-
 export interface UserDTO {
   id: string;
   email: string;
 }
 
-export interface ProjectSummaryDTO {
-  id: string;
-  title: string;
-  revision: number;
-  durationSec: number;
-  sceneCount: number;
-  thumbUrl: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
+/* ---------------------------------------------------------------------------
+ * Server render
+ * ------------------------------------------------------------------------- */
 
-export interface AssetDTO {
-  id: string;
-  kind: AssetKind;
-  source: AssetSource;
-  status: AssetStatus;
-  name: string;
-  mime: string;
-  sizeBytes: number | null;
-  durationSec: number | null;
-  width: number | null;
-  height: number | null;
-  error: string | null;
-  /** Short-lived signed URL; null until the file exists. */
-  url: string | null;
-  thumbUrl: string | null;
-  createdAt: string;
-}
+export const EXPORT_FORMATS = ['mp4', 'mov', 'gif'] as const;
+export const EXPORT_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
 
-export interface GenerationDTO {
-  id: string;
-  assetId: string;
-  provider: string;
-  model: string;
-  prompt: string;
-  status: JobStatus;
-  error: string | null;
-  createdAt: string;
-  completedAt: string | null;
+export const exportBody = z.object({
+  format: z.enum(EXPORT_FORMATS).default('mp4'),
+  resolution: z.enum(EXPORT_RESOLUTIONS).default('1080p'),
+  fps: z.union([z.literal(24), z.literal(30)]).default(30),
+  captions: z.boolean().default(true),
+  /** Include each clip's own sound (dialogue, effects) as well as voiceover and music. */
+  clipAudio: z.boolean().default(true),
+});
+export type ExportSettings = z.infer<typeof exportBody>;
+
+/** Output size for an aspect ratio and a resolution (the short side). */
+export function frameSize(aspect: string, res: (typeof EXPORT_RESOLUTIONS)[number]) {
+  const short = { '480p': 480, '720p': 720, '1080p': 1080 }[res];
+  const long = Math.round((short * 16) / 9 / 2) * 2;
+  return aspect === '9:16' ? { width: short, height: long } : { width: long, height: short };
 }
 
 export interface ExportDTO {
   id: string;
-  revision: number;
-  format: string;
-  resolution: string;
-  fps: number;
-  status: JobStatus;
+  status: AiJobStatus;
   progress: number;
   error: string | null;
   downloadUrl: string | null;
   fileName: string | null;
   sizeBytes: number | null;
-  createdAt: string;
-  completedAt: string | null;
 }
 
-export interface ProjectDTO {
-  id: string;
-  title: string;
-  revision: number;
-  timeline: Timeline;
-  settings: { width: number; height: number; fps: number };
-  assets: AssetDTO[];
-  generations: GenerationDTO[];
-  exports: ExportDTO[];
-  updatedAt: string;
-}
-
-export interface UploadTicketDTO {
-  asset: AssetDTO;
-  uploadUrl: string;
-  method: 'PUT';
-  headers: Record<string, string>;
-}
+/** The scene fields the server renderer reads from a project document. */
+export const sceneForRender = z
+  .object({
+    id: z.string(),
+    vo: z.string().default(''),
+    label: z.string().default(''),
+    prompt: z.string().default(''),
+    file: z.string().nullable().optional(),
+    voFile: z.string().nullable().optional(),
+    kind: z.string().nullable().optional(),
+    dur: z.number().default(6),
+    trimIn: z.number().default(0),
+    trimOut: z.number().nullable().optional(),
+    transition: z.string().default('cut'),
+    tdur: z.number().default(0.5),
+  })
+  .passthrough();
+export type SceneForRender = z.infer<typeof sceneForRender>;
 
 export interface ApiErrorBody {
   error: string;

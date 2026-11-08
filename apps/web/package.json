@@ -1,18 +1,17 @@
 {
   "name": "@mitome/web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json && node --check public/app.js && node --check public/backend.js"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.11",
     "@clerk/themes": "^2.4.57",
-    "@mitome/shared": "*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

@@ -1,19 +1,411 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <title>Mitome Cut</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;800&family=Shippori+Mincho:wght@800&display=swap"
-    />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mitome Cut</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;800&family=Shippori+Mincho:wght@800&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<script>try{var t=localStorage.getItem('mitome-theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<div id="auth-root"></div>
+<div id="shell" hidden>
+<header>
+  <button class="ib" id="btnExplorer" aria-label="Toggle explorer" title="Explorer (Ctrl+B)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+  <a class="logo" href="#" id="logoHome" aria-label="Mitome Cut home">
+    <svg width="26" height="26" viewBox="0 0 280 280" aria-hidden="true"><circle cx="222" cy="58" r="34" fill="#FFC72C"/><circle cx="140" cy="146" r="118" fill="#F26B1D"/><circle cx="140" cy="146" r="101" fill="none" stroke="#FFFFFF" stroke-width="7"/><text x="140" y="152" text-anchor="middle" dominant-baseline="central" font-family="Shippori Mincho, serif" font-weight="800" font-size="138" fill="#FFFFFF">認</text></svg>
+    <span class="w"><b>MITOME</b><i>CUT</i></span>
+  </a>
+  <span class="vsep"></span>
+  <nav class="crumb" aria-label="Breadcrumb">
+    <button id="crumbHome" style="border:none;background:none;color:var(--muted);padding:0;font:inherit;cursor:pointer">Studio</button><span aria-hidden="true">/</span>
+    <button id="crumbShow" style="border:none;background:none;color:var(--muted);padding:0;font:inherit;cursor:pointer;display:none;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis"></button><span id="crumbShowSep" aria-hidden="true" style="display:none">/</span>
+    <button id="crumbSeason" style="border:none;background:none;color:var(--muted);padding:0;font:inherit;cursor:pointer;display:none;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis"></button><span id="crumbSeasonSep" aria-hidden="true" style="display:none">/</span>
+    <span id="crumbEp" class="chip" style="display:none;height:22px;padding:0 8px;color:var(--accent)"></span>
+    <input id="title" value="" placeholder="Untitled" aria-label="Episode or project name" title="Click to rename">
+    <span id="saved"></span><span id="savedDot" class="dot ready" title="Saved" style="margin-left:2px"></span>
+  </nav>
+  <div class="sp"></div>
+  <nav id="steps" aria-label="Stages">
+    <button data-st="script"><i>1</i>Script</button><span class="arr">›</span>
+    <button data-st="scenes"><i>2</i>Scenes<em id="stN2"></em></button><span class="arr">›</span>
+    <button data-st="assets"><i>3</i>Assets<em id="stN3"></em></button><span class="arr">›</span>
+    <button data-st="board"><i>4</i>Storyboard<em id="stN4"></em></button><span class="arr">›</span>
+    <button data-st="studio"><i>5</i>Studio</button>
+  </nav>
+  <div class="sp"></div>
+  <span class="chip" id="provPill"><span class="dot ready"></span>Demo mode</span>
+  <button class="ib" id="btnTheme" aria-label="Switch to light mode" title="Light / dark mode"><svg id="thIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></svg></button>
+  <button class="ib" id="btnSettings" aria-label="Settings" title="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+      <button class="btn pri" id="btnExport"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M4 21h16"/></svg><span>Export</span></button>
+</header>
+
+<div id="main">
+<aside id="explorer" aria-label="Explorer">
+  <div class="exhead"><span>EXPLORER</span><div class="sp"></div><div class="extools"><button class="ib" id="exNewScene" title="New scene" aria-label="New scene"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15h6"/></svg></button><button class="ib" id="exNewEp" title="New episode" aria-label="New episode"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/></svg></button><button class="ib" id="exNewAsset" title="New asset" aria-label="New asset"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 9v6M9 12h6"/></svg></button><button class="ib" id="exRefresh" title="Refresh" aria-label="Refresh"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button><button class="ib" id="exCollapse" title="Collapse folders" aria-label="Collapse folders"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 12h8"/></svg></button><button class="ib" id="exHide" title="Hide explorer (Ctrl+B)" aria-label="Hide explorer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button></div></div>
+  <div id="exTree" role="tree" tabindex="-1"></div>
+  <div id="ctx" role="menu"></div>
+  <div class="exfoot"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><span class="cap" id="exUsage">Account storage</span><div class="bar"><i id="exUsageBar"></i></div></div><button class="btn sm" id="btnSaveJson" title="Download the project file (.json, without media)">.json</button></div>
+</aside>
+<div id="stages">
+<section class="stage" id="stHome" aria-label="Studio dashboard">
+  <div class="homewrap">
+    <div class="hhead">
+      <svg width="44" height="44" viewBox="0 0 280 280" aria-hidden="true"><circle cx="222" cy="58" r="34" fill="#FFC72C"/><circle cx="140" cy="146" r="118" fill="#F26B1D"/><circle cx="140" cy="146" r="101" fill="none" stroke="#FFFFFF" stroke-width="7"/><text x="140" y="152" text-anchor="middle" dominant-baseline="central" font-family="Shippori Mincho, serif" font-weight="800" font-size="138" fill="#FFFFFF">認</text></svg>
+      <div><span class="overline">YOUR STUDIO</span><h1 class="hdtitle">Everything in production</h1></div>
+      <div class="sp"></div>
+      <button class="btn pri" id="hNewShow">+ New TV show</button>
+      <button class="btn" id="hNew">+ New movie</button>
+      <label class="btn" style="margin:0" title="Open a project file (.json)"><input id="loadJson" type="file" accept=".json" hidden>Open file…</label>
+      <button class="btn" id="hSample">Sample</button>
+    </div>
+    <div class="kpis" id="hKpis"></div>
+    <div class="hsec pflow-wrap"><div class="hsech"><h3>How a production flows</h3><span class="cap">From first idea to premiere. Click a stage to jump straight to it in your latest project.</span></div>
+      <div class="pflow" id="hFlow" role="list"></div></div>
+    <div class="hsec"><div class="hsech"><h3>Continue where you left off</h3></div><div class="hcont" id="hCont"></div></div>
+    <div class="hsec"><div class="hsech"><h3>Pipeline</h3><span class="cap">Every episode and movie by stage. Click one to open it.</span></div><div class="hpipe" id="hPipe"></div></div>
+    <div class="hsec"><div class="hsech"><h3>Productions</h3></div><div class="hprod" id="hProd"></div></div>
+    <p class="cap" id="hNote"></p>
+    <div id="hRecent" hidden></div>
+  </div>
+</section>
+
+<section class="stage" id="stShow" aria-label="TV show">
+  <div class="pgmain">
+    <div class="seasonwrap">
+      <div class="pghead"><div style="display:flex;flex-direction:column;gap:2px;flex:1 1 auto;min-width:0"><span class="overline">TV SHOW</span><input id="shTitle" class="h1in" aria-label="Show title" placeholder="Name this show"></div>
+        <button class="btn pri" id="shNewSeason">+ New season</button></div>
+      <div class="sgrid">
+        <div class="scol">
+          <div class="field"><label class="lbl" for="shTheme">Show theme</label><textarea id="shTheme" class="inp" rows="3" placeholder="What the whole show is about"></textarea><span class="cap">Given to Prompt AI in every season and episode.</span></div>
+          <div class="field"><label class="lbl" for="shStyle">Show style</label><textarea id="shStyle" class="inp" rows="4" placeholder="e.g. stylised 3D animated feature-film look"></textarea><span class="cap">Comes first in every prompt across the whole show. Season, episode and scene styles are added after it.</span></div>
+          <div class="field"><label class="lbl" for="shScript">Show bible</label><textarea id="shScript" class="inp" rows="16" placeholder="World, rules, characters, tone, running jokes – anything every season should know."></textarea></div>
+        </div>
+        <div class="scol">
+          <h3>Seasons <span class="muted" id="shSnCount"></span></h3>
+          <div id="shSeasons"></div>
+          <h3 style="margin-top:22px">Show assets</h3>
+          <p class="cap" style="margin:0 0 8px">Cast, places and props that recur across every season. They appear in every episode's Assets with a SHOW tag.</p>
+          <div id="shAssets"></div>
+          <div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm" data-shnew="character" style="flex:1">+ Cast</button><button class="btn sm" data-shnew="location" style="flex:1">+ Location</button><button class="btn sm" data-shnew="prop" style="flex:1">+ Prop</button><button class="btn sm" data-shnew="look" style="flex:1">+ Look</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="stage" id="stSeason" aria-label="Season">
+  <div class="pgmain">
+    <div class="seasonwrap">
+      <div class="pghead"><div style="display:flex;flex-direction:column;gap:2px;flex:1 1 auto;min-width:0"><span class="overline" id="snOver">SEASON</span><input id="snTitle" class="h1in" aria-label="Season title"></div>
+        <button class="btn" id="snSplit" title="Uses headings like “Episode 1: Title” in the season script">Create episodes from script</button><button class="btn pri" id="snNewEp">+ New episode</button></div>
+      <div class="sgrid">
+        <div class="scol">
+          <div class="field"><label class="lbl" for="snTheme">Theme</label><textarea id="snTheme" class="inp" rows="3" placeholder="What the season is about, e.g. a young founder learns that patience is a strategy"></textarea><span class="cap">Given to Prompt AI when it finds assets or writes scene prompts in any episode.</span></div>
+          <div class="field"><label class="lbl" for="snStyle">Season style</label><textarea id="snStyle" class="inp" rows="4" placeholder="e.g. stylised 3D animated feature-film look, warm key light, shallow depth of field"></textarea><span class="cap">Added to every prompt in every episode, after the show style. Episode and scene styles come after it.</span><div class="note" id="snShowNote" style="display:none"></div></div>
+          <div class="field"><label class="lbl" for="snScript">Season script</label><textarea id="snScript" class="inp" rows="18" placeholder="Season overview, arc or the full season script.&#10;&#10;Episode 1: Loosely Coupled&#10;...&#10;&#10;Episode 2: The Better Position&#10;..."></textarea><span class="cap">Headings like “Episode 1: Title” let you create all episodes in one go. Each episode can still have its own script.</span></div>
+        </div>
+        <div class="scol">
+          <h3>Episodes <span class="muted" id="snEpCount"></span></h3>
+          <div id="snEps"></div>
+          <h3 style="margin-top:22px">Season assets</h3>
+          <p class="cap" style="margin:0 0 8px">Recurring cast, locations, props and looks. They appear in every episode's Assets with a SEASON tag, and edits there update the whole season.</p>
+          <div id="snAssets"></div>
+          <div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm" data-snnew="character" style="flex:1">+ Cast</button><button class="btn sm" data-snnew="location" style="flex:1">+ Location</button><button class="btn sm" data-snnew="prop" style="flex:1">+ Prop</button><button class="btn sm" data-snnew="look" style="flex:1">+ Look</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="stage" id="stScript" aria-label="Script">
+  <div class="pgmain">
+    <div class="pghead"><div style="display:flex;flex-direction:column;gap:2px;flex:1 1 auto;min-width:0"><span class="overline" id="scOver">PROJECT</span><input id="scName" class="h1in" placeholder="Name this episode" aria-label="Name"></div><span class="muted" id="scStats"></span></div>
+    <textarea id="script" class="inp scriptbox" placeholder="Paste or write the whole script. A blank line starts a new section; long paragraphs are split into short beats."></textarea>
+  </div>
+  <aside class="pgside">
+    <div id="seasonBox" class="note" style="display:none"></div>
+    <div class="field"><label class="lbl" for="style">Project style (default for every scene)</label>
+      <textarea id="style" class="inp" rows="5" placeholder="e.g. stylised 3D animated feature-film look, warm key light, shallow depth of field"></textarea></div>
+    <div class="grid2">
+      <div class="field"><label class="lbl" for="sWps2">Words per second</label><input id="sWps2" class="inp" type="number" step="0.1" min="1" max="5"></div>
+      <div class="field"><label class="lbl" for="sTarget2">Beat length (s)</label><input id="sTarget2" class="inp" type="number" step="1" min="3" max="15"></div>
+    </div>
+    <button class="btn pri" id="btnSplit">Split into scenes</button>
+    <p class="cap">Replaces the current scene list and takes you to Scenes. Each beat gets its own script line and a starting visual description you can edit.</p>
+    <div class="sp"></div>
+    <button class="btn" onclick="goStage('scenes')">Next: Scenes ›</button>
+  </aside>
+</section>
+
+<section class="stage" id="stScenes" aria-label="Scenes">
+  <div class="pgcol">
+    <div class="pghead sm"><h1>Scenes <span class="muted" id="scnCount"></span></h1><div class="sp"></div>
+      <label class="ck" title="New scenes copy the previous scene's style and use its script as context"><input type="checkbox" id="newHistS" checked> History</label>
+      <button class="btn pri sm" id="scnAdd">+ Create scene</button></div>
+    <div id="sceneCards"></div>
+    <div class="pgfoot"><button class="btn sm" onclick="goStage('script')">‹ Script</button><div class="sp"></div><button class="btn sm" onclick="goStage('assets')">Next: Assets ›</button></div>
+  </div>
+  <div class="pgflow">
+    <div id="flow" aria-label="Scene flow canvas">
+      <div class="fhint">Drag cards to arrange · drag empty space to pan · scroll to zoom · click a transition to change it</div>
+      <div id="world"><svg id="edges" width="1" height="1"><defs><linearGradient id="gEdge" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F26B1D"/><stop offset="1" stop-color="#FFC72C"/></linearGradient></defs><g id="edgeG"></g></svg><div id="fnodes"></div></div>
+      <div class="empty-flow" id="flowEmpty" style="display:none">No scenes yet. Use Create scene below.</div>
+      <div id="tpop" role="dialog" aria-label="Transition"></div>
+      <div class="fbar">
+        <button class="btn pri" id="fAdd"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Create scene</button>
+        <button class="btn" id="fGen">Generate missing</button>
+        <button class="btn" id="fArrange">Auto-arrange</button>
+        <button class="btn" id="fPlay">Play from selected</button>
+      </div>
+      <div class="fzoom"><button class="ib" id="fZo" aria-label="Zoom out">−</button><span id="fZt">100%</span><button class="ib" id="fZi" aria-label="Zoom in">+</button><button class="ib" id="fFit" aria-label="Fit to screen" title="Fit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div>
+    </div>
+  </div>
+</section>
+
+<section class="stage" id="stAssets" aria-label="Assets">
+  <div class="pgcol narrow">
+      <div class="sidehead"><h2>Assets <span id="assetCount"></span></h2>
+        <button class="ib" id="aNewBtn" aria-label="New asset" title="New asset" style="width:28px;height:28px;border:1px solid var(--border);background:var(--raised);color:var(--text)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
+      <div class="prog">
+        <div style="display:flex;gap:6px"><button class="btn pri sm" id="aExtract" style="flex:1 1 auto">Find in script</button><button class="btn sm" id="aWrite" style="flex:1 1 auto">Write scene prompts</button></div>
+        <div class="cap" id="aMode"></div>
+        <div class="seg" role="group" aria-label="Filter" style="width:max-content"><button data-af="all" aria-pressed="true">All</button><button data-af="character" aria-pressed="false">Cast</button><button data-af="location" aria-pressed="false">Locations</button><button data-af="prop" aria-pressed="false">Props</button><button data-af="look" aria-pressed="false">Looks</button></div>
+      </div>
+      <div id="assetList" style="flex:1 1 auto;overflow:auto;padding:6px 8px 12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px"></div>
+      <div class="newbar" id="aNewBar">
+        <button class="btn sm" data-new="character" style="flex:1">+ Cast</button><button class="btn sm" data-new="location" style="flex:1">+ Location</button><button class="btn sm" data-new="prop" style="flex:1">+ Prop</button><button class="btn sm" data-new="look" style="flex:1">+ Look</button>
+      </div>
+      </div>
+  <div class="pgmain">
+    <div class="pghead"><h1>Assets per scene</h1><span class="muted">Tick which assets appear in each scene. They are added to the scene prompt as a “must contain” list.</span><div class="sp"></div>
+      <button class="btn sm" id="mxAuto">Auto-tag all scenes</button><button class="btn sm" onclick="goStage('board')">Next: Storyboard ›</button></div>
+    <div id="matrix"></div>
+  </div>
+</section>
+
+<section class="stage" id="stBoard" aria-label="Storyboard">
+  <div class="pgmain">
+    <div class="pghead"><h1>Storyboard</h1><span class="muted" id="bdStats"></span><div class="sp"></div>
+      <button class="btn sm" id="bdGen">Sketch missing frames</button><button class="btn sm" id="bdPrint">Print / save PDF</button><button class="btn pri sm" onclick="goStage('studio')">Next: Studio ›</button></div>
+    <p class="cap" style="margin:-6px 0 14px">Built from each scene's description, script, assets and transition. Approve a frame and it becomes that scene's start image when the scene isn't chained.</p>
+    <div id="board"></div>
+  </div>
+</section>
+
+<section class="stage" id="stStudio" aria-label="Studio">
+<div id="body">
+  <nav id="rail" aria-label="Tools">
+    <button data-pane="script"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Script</button>
+    <button data-pane="scenes" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg>Scenes</button>
+    <button data-pane="media"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>Media</button>
+    <button data-pane="assets"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M15 4h6v6h-6zM17 14l4 6h-8z"/></svg>Assets</button>
+    <button data-pane="voice"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/></svg>Voice</button>
+    <button data-pane="music"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Music</button>
+    <button data-pane="style"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 10l-5 3.6L16.5 20 12 16.4 7.5 20 9 13.6 4 10l6.1-1.2z"/></svg>Style</button>
+  </nav>
+
+  <aside id="side">
+    <!-- Script -->
+    <div class="pane" data-pane="script"><div class="sidehead"><h2>Script</h2></div><div class="sidebody"><p class="cap">The script now lives in its own stage.</p><button class="btn" onclick="goStage('script')">Open Script stage</button></div></div>
+    <!-- Scenes -->
+    <div class="pane on" data-pane="scenes">
+      <div class="sidehead"><h2>Scenes <span id="sceneCount"></span></h2>
+        <button class="ib" id="btnAddScene2" aria-label="Create scene" title="Create scene" style="width:28px;height:28px;border:1px solid var(--border);background:var(--raised);color:var(--text)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
+      <div class="prog">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)"><span id="progTxt">0 of 0 generated</span><span id="progPct">0%</span></div>
+        <div class="bar"><i id="progBar"></i></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn pri sm" id="btnGenAll" style="flex:1 1 auto">Generate missing</button>
+          <button class="btn sm" id="btnVoAll">Voice all</button>
+          <button class="btn sm" id="btnStopGen" disabled>Stop</button>
+        </div>
+      </div>
+      <div id="sceneList"></div>
+      <div class="newbar">
+        <button class="btn pri sm" id="btnAddScene" style="flex:1 1 auto"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Create scene</button>
+        <label class="ck" title="The new scene copies the previous scene's style and uses its script as context"><input type="checkbox" id="newHist" checked> Include history</label>
+      </div>
+    </div>
+    <!-- Media -->
+    <div class="pane" data-pane="media">
+      <div class="sidehead"><h2>Media</h2></div>
+      <div class="sidebody">
+        <div class="field"><span class="lbl">Import video clips</span>
+          <label class="btn dash" style="height:64px;flex-direction:column;gap:2px"><input id="importVids" type="file" accept="video/*" multiple hidden><span style="color:var(--text)">Choose videos…</span><span class="cap">or drag files onto the timeline</span></label>
+          <p class="cap">Each file becomes a scene, added in filename order (01, 02, 03…). MP4/H.264 works best.</p></div>
+        <div class="field"><span class="lbl">Character / look reference</span>
+          <label class="btn dash"><input id="charRef" type="file" accept="image/*" hidden>Upload reference image…</label>
+          <div id="charPrev" class="cap">Used as the first frame for scene 1 and any scene that isn't chained.</div></div>
+      </div>
+    </div>
+    <!-- Voice -->
+    <div class="pane" data-pane="voice">
+      <div class="sidehead"><h2>Voice</h2></div>
+      <div class="sidebody">
+        <p class="cap">Voiceover is made per scene from its script, with ElevenLabs. You can also replace any scene's voice with your own audio file in the Audio tab.</p>
+        <div class="field"><label class="lbl" for="vVoice">Voice ID</label><input id="vVoice" class="inp"></div>
+        <div class="field"><label class="lbl" for="vModel">Model</label><input id="vModel" class="inp"></div>
+        <button class="btn pri" id="btnVoAll2">Voice all scenes</button>
+        <p class="cap" id="voKeyNote"></p>
+      </div>
+    </div>
+    <!-- Music -->
+    <div class="pane" data-pane="music">
+      <div class="sidehead"><h2>Music</h2></div>
+      <div class="sidebody">
+        <label class="btn dash"><input id="musicFile" type="file" accept="audio/*" hidden><span id="musicLbl">Add a music bed…</span></label>
+        <div class="field"><div style="display:flex;justify-content:space-between;font-size:12px"><label class="lbl" for="musicVol">Music level</label><span id="musicVolTxt" style="font-variant-numeric:tabular-nums">25%</span></div><input id="musicVol" type="range" min="0" max="100" value="25"></div>
+        <div class="trow"><div><div class="t1">Duck under voice</div><div class="t2">Lowers the music while narration plays</div></div><label class="tg"><input type="checkbox" id="duckOn" checked aria-label="Duck music under voice"><span></span></label></div>
+        <button class="btn sm" id="musicRemove">Remove music</button>
+      </div>
+    </div>
+    <!-- Style -->
+    <div class="pane" data-pane="style">
+      <div class="sidehead"><h2>Project style</h2></div>
+      <div class="sidebody">
+        <div class="field"><label class="lbl" for="style2">Default style for every scene</label>
+          <textarea id="style2" class="inp" rows="5" placeholder="e.g. stylised 3D animated feature-film look, warm key light, shallow depth of field"></textarea></div>
+        <p class="cap">Any scene can switch to its own style in the Clip tab of the inspector.</p>
+        <button class="btn sm" id="styleResetAll">Set every scene back to project style</button>
+      </div>
+    </div>
+  </aside>
+
+  <main id="viewer" aria-label="Viewer">
+    <div class="vtop"><b id="vScene">No scene</b><span>·</span><span id="vModel2">–</span><div class="sp"></div>
+      <div class="seg" role="group" aria-label="Aspect ratio"><button data-ar="16:9" aria-pressed="true">16:9</button><button data-ar="9:16" aria-pressed="false">9:16</button></div>
+      <select id="aspect" hidden><option value="16:9">16:9</option><option value="9:16">9:16</option></select>
+    </div>
+    <div class="stagewrap"><canvas id="stage" width="1280" height="720"></canvas></div>
+    <div id="exportOut"></div>
+    <div class="transport">
+      <span id="tc">00:00:00:00<span> / 00:00:00:00</span></span>
+      <div class="tmid">
+        <button class="ib" id="btnPrev" aria-label="Previous scene" style="color:var(--text)"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5L9 12l11 7z"/></svg></button>
+        <button id="btnPlay" aria-label="Play"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+        <button class="ib" id="btnNext" aria-label="Next scene" style="color:var(--text)"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5l11 7-11 7z"/></svg></button>
+      </div>
+      <label class="ck"><input type="checkbox" id="captions" checked> Captions</label>
+      <button class="ib" id="btnMute" aria-label="Mute preview" title="Mute preview"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z"/><path id="muteWaves" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+      <button class="ib" id="btnFull" aria-label="Full screen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    </div>
+  </main>
+
+  <aside id="insp" aria-label="Inspector">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="clip" aria-selected="true">Clip</button>
+      <button role="tab" data-tab="audio" aria-selected="false">Audio</button>
+      <button role="tab" data-tab="motion" aria-selected="false">Transition</button>
+    </div>
+    <div id="inspBody"></div>
+    <div class="ifoot">
+      <button class="btn pri" id="iGenMain"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 10l-5 3.6L16.5 20 12 16.4 7.5 20 9 13.6 4 10l6.1-1.2z"/></svg><span id="iGenLbl">Generate clip</span></button>
+      <button class="ib" id="iMore" aria-label="More scene actions" style="width:34px;height:34px;border:1px solid var(--border);background:var(--raised);color:var(--text)"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+      <div class="menu" id="moreMenu">
+        <button data-act="dup">Duplicate scene</button>
+        <button data-act="left">Move earlier</button>
+        <button data-act="right">Move later</button>
+        <button data-act="clear">Remove generated clip</button>
+        <button data-act="del" class="danger">Delete scene</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<section id="tl" aria-label="Timeline">
+  <div class="tlbar">
+    <button class="ib" aria-label="Select tool" aria-pressed="true" title="Select"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
+    <button class="ib" id="tlSplit" aria-label="Split at playhead" title="Split clip at playhead"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></svg></button>
+    <button class="ib" id="tlDel" aria-label="Delete selected scene" title="Delete selected scene"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+    <span class="vsep" style="margin:0 6px;height:18px"></span>
+    <span class="muted" style="margin-left:4px">Drag to reorder · click to select · click ruler to seek · drop videos here</span>
+    <div class="sp"></div>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9C9CA6" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4M8 11h6"/></svg>
+    <input id="zoom" type="range" min="8" max="80" value="28" style="width:120px" aria-label="Timeline zoom">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9C9CA6" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4M8 11h6M11 8v6"/></svg>
+  </div>
+  <div id="tlScroll">
+    <div id="tracks">
+      <div class="th0" style="height:24px"></div><div id="ruler"></div>
+      <div class="th0 thd" style="height:64px"><span class="badge b-v">V1</span>Video</div><div class="lane" id="laneV" style="height:64px"></div>
+      <div class="th0 thd" style="height:30px"><span class="badge b-t">T1</span>Captions</div><div class="lane" id="laneT" style="height:30px"></div>
+      <div class="th0 thd" style="height:44px"><span class="badge b-a">A1</span>Voiceover</div><div class="lane" id="laneA" style="height:44px"></div>
+      <div class="th0 thd" style="height:44px;border-bottom:0"><span class="badge b-t">A2</span>Music</div><div class="lane" id="laneM" style="height:44px;border-bottom:0"></div>
+      <div id="playhead"></div>
+    </div>
+  </div>
+</section>
+</section>
+</div>
+</div>
+</div>
+
+<div class="modal" id="settings" role="dialog" aria-modal="true" aria-labelledby="setT">
+  <div class="box">
+    <div class="bh"><b id="setT">Settings</b><button class="ib" id="sX" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="bb">
+      <div class="field"><label class="lbl" for="sTheme">Appearance</label>
+        <select id="sTheme" class="inp"><option value="system">Match my system</option><option value="dark">Dark (Studio)</option><option value="light">Light (Paper)</option></select></div>
+      <div class="field"><label class="lbl" for="sProvider">Video provider</label>
+        <select id="sProvider" class="inp"><option value="demo">Demo (offline, placeholder clips)</option><option value="fal">fal.ai (Kling, Veo, Seedance, Hailuo, Wan…)</option></select></div>
+      <div id="falBox" style="display:flex;flex-direction:column;gap:14px">
+        <p class="cap" id="sFalNote"></p>
+        <div class="field"><label class="lbl" for="sT2V">Text-to-video model</label><input id="sT2V" class="inp"></div>
+        <div class="field"><label class="lbl" for="sI2V">Image-to-video model (chaining and character reference)</label><input id="sI2V" class="inp"></div>
+        <div class="field"><label class="lbl" for="sDurs">Allowed clip lengths (seconds, comma separated)</label><input id="sDurs" class="inp"></div>
+        <div class="trow"><div><div class="t1">Send length as text</div><div class="t2">"5" instead of 5 – Kling needs this</div></div><label class="tg"><input type="checkbox" id="sDurStr"><span></span></label></div>
+      </div>
+      <div class="field"><label class="lbl" for="sLlm">Prompt AI (finds assets and writes prompts)</label>
+        <select id="sLlm" class="inp"><option value="off">Built-in rules (free, basic)</option><option value="fal">fal.ai LLM</option><option value="anthropic">Claude API</option></select></div>
+      <div class="grid2">
+        <div class="field"><label class="lbl" for="sLlmModel">Prompt AI model</label><input id="sLlmModel" class="inp"></div>
+        <div class="field"><span class="lbl">Prompt AI on the server</span><p class="cap" id="sLlmNote" style="margin:6px 0 0"></p></div>
+      </div>
+      <div class="field"><label class="lbl" for="sImgModel">Asset image model (fal.ai)</label><input id="sImgModel" class="inp"></div>
+      <p class="cap" id="sElNote"></p>
+      <div class="grid2">
+        <div class="field"><label class="lbl" for="sVoice">Voice ID</label><input id="sVoice" class="inp"></div>
+        <div class="field"><label class="lbl" for="sElModel">TTS model</label><input id="sElModel" class="inp"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label class="lbl" for="sWps">Words per second</label><input id="sWps" class="inp" type="number" step="0.1" min="1" max="5"></div>
+        <div class="field"><label class="lbl" for="sTarget">Beat length (s)</label><input id="sTarget" class="inp" type="number" step="1" min="3" max="15"></div>
+      </div>
+      <div class="trow"><div><div class="t1" id="sAccount">Signed in</div><div class="t2">API keys are kept on the server and never reach this browser</div></div><button class="btn sm" id="sLogout">Sign out</button></div>
+    </div>
+    <div class="bf"><button class="btn pri" id="sClose">Done</button></div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<div class="modal" id="exportDlg" role="dialog" aria-modal="true" aria-labelledby="exT">
+  <div class="box" style="max-width:460px">
+    <div class="bh"><b id="exT">Export</b><button class="ib" id="exX" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="bb">
+      <p class="cap" style="margin:0">Rendered on the server from your saved project: scenes back to back, transitions, voiceover, clip sound and music. You can close this window; the file is kept in the project's renders folder.</p>
+      <div class="grid2">
+        <div class="field"><label class="lbl" for="exFormat">Format</label><select id="exFormat" class="inp"><option value="mp4">MP4 (H.264)</option><option value="mov">MOV</option><option value="gif">GIF (silent, small)</option></select></div>
+        <div class="field"><label class="lbl" for="exRes">Resolution</label><select id="exRes" class="inp"><option value="480p">480p draft</option><option value="720p" selected>720p</option><option value="1080p">1080p</option></select></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label class="lbl" for="exFps">Frame rate</label><select id="exFps" class="inp"><option value="24">24 fps</option><option value="30" selected>30 fps</option></select></div>
+        <div class="field"><span class="lbl">Length</span><p class="cap" id="exLen" style="margin:8px 0 0"></p></div>
+      </div>
+      <div class="trow"><div><div class="t1">Burn in captions</div><div class="t2">Word-by-word captions from each scene's voiceover</div></div><label class="tg"><input type="checkbox" id="exCaps" checked><span></span></label></div>
+      <div class="trow"><div><div class="t1">Keep clip sound</div><div class="t2">Mix each clip's own audio under the voiceover</div></div><label class="tg"><input type="checkbox" id="exClipAudio" checked><span></span></label></div>
+      <div id="exProg" style="display:none;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:12px"><span id="exState">Queued</span><span id="exPct" style="font-variant-numeric:tabular-nums">0%</span></div><div class="bar"><i id="exBar"></i></div></div>
+      <p class="cap" id="exResult" style="margin:0"></p>
+    </div>
+    <div class="bf" style="justify-content:space-between"><button class="btn sm" id="exQuick" title="Records the preview in real time in this browser">Quick record in browser</button><span style="display:flex;gap:8px"><button class="btn" id="exCancel" style="display:none">Cancel render</button><button class="btn pri" id="exGo">Render</button></span></div>
+  </div>
+</div>
+
+
+<script src="/backend.js"></script>
+<script type="module" src="/src/main.tsx"></script>
+</body>
 </html>

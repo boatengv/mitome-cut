@@ -15,6 +15,13 @@
       "when": 1794084012979,
       "tag": "0001_conscious_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794133611763,
+      "tag": "0002_prototype_library",
+      "breakpoints": true
     }
   ]
 }

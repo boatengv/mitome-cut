@@ -3,24 +3,19 @@ import { config } from './config.js';
 
 /**
  * Background jobs live in Postgres (pg-boss), so there is no Redis to run.
- * Queue names and payloads are defined here and shared by the API (which
- * sends) and the worker (which processes).
+ * The API sends; the worker processes.
  */
 export const QUEUES = {
-  processAsset: 'asset.process',
-  runGeneration: 'generation.run',
+  aiJob: 'ai.job',
   renderExport: 'export.render',
   backup: 'maintenance.backup',
   cleanup: 'maintenance.cleanup',
 } as const;
 
-export interface ProcessAssetJob {
-  assetId: string;
+export interface AiJobPayload {
+  jobId: string;
 }
-export interface RunGenerationJob {
-  generationId: string;
-}
-export interface RenderExportJob {
+export interface RenderExportPayload {
   exportId: string;
 }
 
@@ -31,10 +26,8 @@ export async function getBoss(): Promise<PgBoss> {
   const b = new PgBoss({ connectionString: config.DATABASE_URL, max: 4 });
   b.on('error', (err: unknown) => console.error('[queue]', err));
   await b.start();
-  await b.createQueue(QUEUES.processAsset, { retryLimit: 2, retryDelay: 10, expireInSeconds: 15 * 60 });
-  // Generations are never retried automatically: with a paid model a retry is a second charge.
-  await b.createQueue(QUEUES.runGeneration, { retryLimit: 0, expireInSeconds: 30 * 60 });
-  // Renders are not retried automatically: a failed export is surfaced to the user.
+  // AI jobs are never retried automatically: with a paid model a retry is a second charge.
+  await b.createQueue(QUEUES.aiJob, { retryLimit: 0, expireInSeconds: (config.AI_JOB_TIMEOUT_MIN + 5) * 60 });
   await b.createQueue(QUEUES.renderExport, { retryLimit: 0, expireInSeconds: 60 * 60 });
   await b.createQueue(QUEUES.backup, { retryLimit: 2, retryDelay: 300, expireInSeconds: 30 * 60 });
   await b.createQueue(QUEUES.cleanup, { retryLimit: 0, expireInSeconds: 10 * 60 });

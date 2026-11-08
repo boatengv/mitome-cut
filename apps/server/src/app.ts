@@ -9,10 +9,10 @@ import { config } from './config.js';
 import { db } from './db/client.js';
 import { loadUser } from './auth.js';
 import { HttpError } from './http.js';
-import { listModels } from './providers/index.js';
 import { authRoutes } from './routes/auth.js';
-import { projectRoutes } from './routes/projects.js';
-import { mediaRoutes } from './routes/media.js';
+import { libraryRoutes } from './routes/library.js';
+import { aiRoutes } from './routes/ai.js';
+import { exportRoutes } from './routes/exports.js';
 import { localStorageRoutes } from './routes/storage.js';
 
 export async function buildApp() {
@@ -76,11 +76,10 @@ export async function buildApp() {
     return { ok: true };
   });
 
-  app.get('/api/models', async () => ({ models: listModels() }));
-
   await app.register(authRoutes);
-  await app.register(projectRoutes);
-  await app.register(mediaRoutes);
+  await app.register(libraryRoutes);
+  await app.register(aiRoutes);
+  await app.register(exportRoutes);
   await app.register(localStorageRoutes);
 
   // Optionally serve the built web app (single-container deploys).

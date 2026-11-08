@@ -12,3 +12,4 @@ infra/terraform/*.tfstate
 infra/terraform/*.tfstate.*
 infra/terraform/terraform.tfvars
 infra/terraform/.terraform.lock.hcl
+dist-stub/
