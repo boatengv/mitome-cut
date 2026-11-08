@@ -33,11 +33,26 @@ const schema = z.object({
   /* Guardrails: hard limits that keep usage, and the bill, bounded. */
   MAX_UPLOAD_MB: z.coerce.number().int().positive().default(500),
   STORAGE_QUOTA_MB: z.coerce.number().int().positive().default(5000),
-  GENERATIONS_PER_DAY: z.coerce.number().int().min(0).default(20),
   EXPORTS_PER_DAY: z.coerce.number().int().min(0).default(30),
-  MAX_PROJECTS_PER_USER: z.coerce.number().int().positive().default(50),
+
+  MAX_DOC_KB: z.coerce.number().int().positive().default(2048),
+
+  /* AI providers: keys live only on the server. Unset = that feature is off. */
+  FAL_KEY: z.string().optional(),
+  FAL_QUEUE_URL: z.string().default('https://queue.fal.run'),
+  FAL_RUN_URL: z.string().default('https://fal.run'),
+  ELEVENLABS_API_KEY: z.string().optional(),
+  ELEVENLABS_URL: z.string().default('https://api.elevenlabs.io'),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_URL: z.string().default('https://api.anthropic.com'),
+  VIDEO_JOBS_PER_DAY: z.coerce.number().int().min(0).default(40),
+  IMAGE_JOBS_PER_DAY: z.coerce.number().int().min(0).default(150),
+  TTS_CHARS_PER_DAY: z.coerce.number().int().min(0).default(30000),
+  LLM_CALLS_PER_DAY: z.coerce.number().int().min(0).default(100),
+  AI_JOB_TIMEOUT_MIN: z.coerce.number().int().min(1).default(20),
 
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
+  AI_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
   FFMPEG_PATH: z.string().default('ffmpeg'),
   FFPROBE_PATH: z.string().default('ffprobe'),
   FONT_PATH: z.string().default('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),

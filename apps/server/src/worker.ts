@@ -1,6 +1,6 @@
 import { config } from './config.js';
-import { getBoss, QUEUES, stopBoss, type ProcessAssetJob, type RenderExportJob, type RunGenerationJob } from './queue.js';
-import { backupDatabase, cleanup, processAsset, renderExport, runGeneration } from './jobs.js';
+import { getBoss, QUEUES, stopBoss, type AiJobPayload, type RenderExportPayload } from './queue.js';
+import { backupDatabase, cleanup, renderExport, runAiJob } from './jobs.js';
 import { pool } from './db/client.js';
 
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
@@ -8,15 +8,12 @@ const log = (msg: string, extra: Record<string, unknown> = {}) =>
 
 async function main() {
   const boss = await getBoss();
-  const concurrency = { localConcurrency: config.WORKER_CONCURRENCY };
 
-  await boss.work<ProcessAssetJob>(QUEUES.processAsset, { localConcurrency: 2 }, async ([job]) => {
-    if (job) await processAsset(job.data.assetId, log);
+  // AI jobs mostly wait on fal.ai, so several run at once; renders are CPU-bound.
+  await boss.work<AiJobPayload>(QUEUES.aiJob, { localConcurrency: config.AI_CONCURRENCY }, async ([job]) => {
+    if (job) await runAiJob(job.data.jobId, log);
   });
-  await boss.work<RunGenerationJob>(QUEUES.runGeneration, concurrency, async ([job]) => {
-    if (job) await runGeneration(job.data.generationId, log);
-  });
-  await boss.work<RenderExportJob>(QUEUES.renderExport, concurrency, async ([job]) => {
+  await boss.work<RenderExportPayload>(QUEUES.renderExport, { localConcurrency: config.WORKER_CONCURRENCY }, async ([job]) => {
     if (job) await renderExport(job.data.exportId, log);
   });
   await boss.work(QUEUES.backup, async () => backupDatabase(log));
@@ -26,7 +23,7 @@ async function main() {
   else await boss.unschedule(QUEUES.backup).catch(() => undefined);
   await boss.schedule(QUEUES.cleanup, '17 * * * *');
 
-  log('worker started', { concurrency: config.WORKER_CONCURRENCY, backups: config.BACKUP_CRON || 'off' });
+  log('worker started', { renders: config.WORKER_CONCURRENCY, ai: config.AI_CONCURRENCY, backups: config.BACKUP_CRON || 'off' });
 
   const shutdown = async (signal: string) => {
     log(`${signal} received, finishing current jobs`);

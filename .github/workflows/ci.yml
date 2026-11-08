@@ -39,6 +39,9 @@ jobs:
       - run: npm run build
       - name: End-to-end smoke test
         run: |
+          node scripts/mock-providers.mjs &
+          export FAL_KEY=mock FAL_QUEUE_URL=http://localhost:4010/queue FAL_RUN_URL=http://localhost:4010/run
+          export ELEVENLABS_API_KEY=mock ELEVENLABS_URL=http://localhost:4010 ANTHROPIC_API_KEY=mock ANTHROPIC_URL=http://localhost:4010
           WEB_DIST_DIR=apps/web/dist node apps/server/dist/api.js &
           node apps/server/dist/worker.js &
           for i in $(seq 1 30); do curl -sf localhost:3000/api/health && break; sleep 1; done

@@ -9,6 +9,10 @@ COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 RUN npm ci
 COPY . .
+# The browser bundle needs Clerk's publishable key at build time (it is public, not a secret).
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
+RUN test -n "$VITE_CLERK_PUBLISHABLE_KEY" || (echo 'Build arg VITE_CLERK_PUBLISHABLE_KEY is missing' && exit 1)
 RUN npm run build
 
 FROM node:22-trixie-slim AS runtime

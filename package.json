@@ -19,7 +19,9 @@
     "db:migrate": "npm run db:migrate -w @mitome/server",
     "build": "npm run build -w @mitome/web && npm run build -w @mitome/server",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "build:stub": "npm run build:stub -w @mitome/server && CLERK_STUB=1 npm run build -w @mitome/web",
+    "mock:providers": "node scripts/mock-providers.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

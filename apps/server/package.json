@@ -12,7 +12,8 @@
     "start:api": "node dist/api.js",
     "start:worker": "node dist/worker.js",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "build:stub": "node build.mjs --stub"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.920.0",
